@@ -1,0 +1,3193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR 智能决策驾驶舱</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg-soft: rgba(10, 22, 38, 0.72);
+      --panel: rgba(10, 26, 48, 0.58);
+      --panel-2: rgba(16, 35, 64, 0.76);
+      --line: rgba(99, 211, 255, 0.34);
+      --text: #e9f6ff;
+      --subtext: #92b7d3;
+      --primary: #42d6ff;
+      --secondary: #8b5cf6;
+      --success: #1ee3a8;
+      --warn: #ffc857;
+      --danger: #ff6b8a;
+      --shadow: 0 18px 48px rgba(0,0,0,.35);
+      --glow: 0 0 24px rgba(66,214,255,.28), 0 0 40px rgba(139,92,246,.18);
+      --radius: 18px;
+      --taskbar-h: 64px;
+      --topbar-h: 74px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(66,214,255,.16), transparent 26%),
+        radial-gradient(circle at 80% 18%, rgba(139,92,246,.16), transparent 28%),
+        linear-gradient(180deg, #06111d 0%, #081423 42%, #07111f 100%);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(66,214,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(66,214,255,.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+      pointer-events: none;
+    }
+
+    #cursorGlow {
+      position: fixed;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(66,214,255,.12), rgba(139,92,246,.06), transparent 68%);
+      filter: blur(10px);
+      z-index: 1;
+      transition: width .2s ease, height .2s ease, opacity .2s ease;
+    }
+
+    .glass {
+      background: linear-gradient(180deg, rgba(11, 27, 47, .76), rgba(8, 19, 34, .58));
+      border: 1px solid rgba(121, 212, 255, .18);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    .topbar {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 12px;
+      height: var(--topbar-h);
+      border-radius: 22px;
+      padding: 12px 18px;
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 1.2fr;
+      align-items: center;
+      gap: 16px;
+      z-index: 30;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(66,214,255,.22), rgba(139,92,246,.22));
+      border: 1px solid rgba(66,214,255,.35);
+      box-shadow: 0 0 24px rgba(66,214,255,.18);
+      font-size: 22px;
+    }
+
+    .brand h1 {
+      font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+      font-size: 22px;
+      margin: 0;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand p, .top-meta, .status-chip, .hint, .subtle {
+      color: var(--subtext);
+    }
+
+    .brand p { margin: 3px 0 0; font-size: 12px; }
+
+    .top-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .mode-pill, .status-chip, .top-btn, .ctrl-btn, .action-btn, .mini-btn, .task-btn, .tag, .quick-btn, .company-chip, .indicator-chip {
+      border: 1px solid rgba(113, 208, 255, .22);
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(17, 39, 66, .9), rgba(8, 20, 35, .88));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 8px 18px rgba(0,0,0,.18);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
+      user-select: none;
+    }
+
+    .mode-pill:hover, .status-chip:hover, .top-btn:hover, .ctrl-btn:hover, .action-btn:hover, .mini-btn:hover, .task-btn:hover, .quick-btn:hover, .company-chip:hover, .indicator-chip:hover {
+      transform: translateY(-2px);
+      border-color: rgba(66,214,255,.46);
+      box-shadow: 0 0 20px rgba(66,214,255,.18), 0 14px 22px rgba(0,0,0,.18);
+      filter: brightness(1.08);
+    }
+
+    .mode-pill:active, .status-chip:active, .top-btn:active, .ctrl-btn:active, .action-btn:active, .mini-btn:active, .task-btn:active {
+      transform: translateY(0);
+      box-shadow: inset 0 4px 10px rgba(0,0,0,.25);
+    }
+
+    .mode-pill {
+      padding: 10px 16px;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode-pill.active {
+      background: linear-gradient(135deg, rgba(66,214,255,.26), rgba(139,92,246,.26));
+      border-color: rgba(66,214,255,.5);
+      box-shadow: 0 0 26px rgba(66,214,255,.22), 0 0 34px rgba(139,92,246,.14);
+    }
+
+    .top-right {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .top-btn {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+    }
+
+    .status-chip {
+      padding: 8px 12px;
+      font-size: 12px;
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(66,214,255,.24), rgba(139,92,246,.24));
+      border: 1px solid rgba(66,214,255,.35);
+      box-shadow: var(--glow);
+    }
+
+    .workspace {
+      position: absolute;
+      top: calc(var(--topbar-h) + 28px);
+      bottom: calc(var(--taskbar-h) + 18px);
+      left: 16px;
+      right: 16px;
+      overflow: hidden;
+      border-radius: 28px;
+    }
+
+    .workspace::before,
+    .workspace::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .workspace::before {
+      background: radial-gradient(circle at 50% 0%, rgba(66,214,255,.08), transparent 36%);
+    }
+
+    .workspace::after {
+      border: 1px solid rgba(111, 211, 255, .09);
+      border-radius: 28px;
+      box-shadow: inset 0 0 80px rgba(0,0,0,.12);
+    }
+
+    .dock-grid {
+      position: absolute;
+      inset: 12px;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 18px;
+      align-content: start;
+      pointer-events: auto;
+      z-index: 6;
+    }
+
+    .menu-card {
+      pointer-events: auto;
+      min-height: 145px;
+      border-radius: 24px;
+      padding: 18px 16px;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    }
+
+    .menu-card:hover {
+      transform: translateY(-6px) rotateX(3deg) rotateY(-3deg);
+      box-shadow: 0 18px 38px rgba(0,0,0,.22), 0 0 30px rgba(66,214,255,.16);
+      border-color: rgba(66,214,255,.42);
+    }
+
+    .menu-card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(66,214,255,.15), rgba(139,92,246,.12), transparent 50%);
+      opacity: .9;
+      pointer-events: none;
+    }
+
+    .menu-card .icon {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      border-radius: 18px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, rgba(66,214,255,.25), rgba(139,92,246,.24));
+      box-shadow: 0 0 26px rgba(66,214,255,.18);
+      position: relative;
+      z-index: 1;
+    }
+
+    .menu-card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .menu-card p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--subtext);
+      position: relative;
+      z-index: 1;
+    }
+
+    .menu-toggle {
+      position: absolute;
+      left: 24px;
+      top: 24px;
+      z-index: 9;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .dock-grid.collapsed {
+      grid-template-columns: repeat(1, minmax(160px, 240px));
+      width: 260px;
+    }
+
+    .window-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+    }
+
+    .window {
+      pointer-events: auto;
+      position: absolute;
+      min-width: 320px;
+      min-height: 240px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(101, 205, 255, .22);
+      box-shadow: var(--shadow), 0 0 28px rgba(66,214,255,.1);
+      animation: windowIn .28s ease;
+    }
+
+    .window.active { box-shadow: var(--shadow), 0 0 40px rgba(66,214,255,.14), 0 0 22px rgba(139,92,246,.12); }
+    .window.minimized { display: none; }
+    .window.fullscreen {
+      left: 16px !important;
+      top: 16px !important;
+      width: calc(100% - 32px) !important;
+      height: calc(100% - 32px) !important;
+    }
+
+    @keyframes windowIn {
+      from { opacity: 0; transform: scale(.96) translateY(12px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .window-header {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 10px 16px;
+      border-bottom: 1px solid rgba(99, 211, 255, .12);
+      background: linear-gradient(180deg, rgba(19, 41, 69, .92), rgba(10, 22, 37, .88));
+      cursor: move;
+    }
+
+    .window-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      min-width: 0;
+    }
+
+    .window-title i {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(66,214,255,.2), rgba(139,92,246,.2));
+    }
+
+    .window-title span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .window-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .ctrl-btn, .mini-btn, .action-btn {
+      padding: 7px 10px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .ctrl-btn.icon-only, .mini-btn.icon-only {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border-radius: 12px;
+    }
+
+    .window-body {
+      height: calc(100% - 56px);
+      padding: 16px;
+      overflow: auto;
+      background: linear-gradient(180deg, rgba(8, 20, 35, .82), rgba(9, 18, 29, .74));
+    }
+
+    .content-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .content-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .content-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .panel {
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(14, 31, 55, .76), rgba(8, 18, 30, .68));
+      border: 1px solid rgba(100, 209, 255, .15);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .panel h4 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kpi-row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .kpi {
+      padding: 14px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(17, 38, 66, .9), rgba(9, 21, 37, .78));
+      border: 1px solid rgba(100, 209, 255, .13);
+      min-height: 96px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi::after {
+      content: "";
+      position: absolute;
+      right: -14px;
+      top: -14px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(66,214,255,.16), transparent 66%);
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .kpi-value {
+      margin-top: 8px;
+      font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+      font-size: 24px;
+      color: #fff;
+    }
+
+    .kpi-trend {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--success);
+    }
+
+    .chart {
+      width: 100%;
+      min-height: 260px;
+      height: 260px;
+    }
+
+    .chart.lg { height: 320px; }
+    .chart.sm { height: 220px; }
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid rgba(100, 209, 255, .1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(100, 209, 255, .08);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(12, 27, 46, .95);
+      z-index: 1;
+      color: #c7e8fb;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 999px;
+      color: #dff7ff;
+      cursor: default;
+    }
+
+    .tag.good { background: rgba(30, 227, 168, .12); border-color: rgba(30, 227, 168, .2); }
+    .tag.warn { background: rgba(255, 200, 87, .12); border-color: rgba(255, 200, 87, .2); }
+    .tag.bad { background: rgba(255, 107, 138, .12); border-color: rgba(255, 107, 138, .2); }
+
+    .diag-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .diag-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(15, 33, 58, .82), rgba(8, 18, 29, .7));
+      border: 1px solid rgba(100, 209, 255, .1);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .diag-item strong { color: #fff; }
+
+    .upload-zone {
+      min-height: 120px;
+      border: 1px dashed rgba(100, 209, 255, .34);
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--subtext);
+      transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+
+    .upload-zone:hover {
+      border-color: rgba(66,214,255,.5);
+      box-shadow: 0 0 18px rgba(66,214,255,.12);
+      transform: translateY(-2px);
+    }
+
+    .switch-row, .chip-row, .quick-row, .filter-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .company-chip.active, .indicator-chip.active, .quick-btn.active {
+      background: linear-gradient(135deg, rgba(66,214,255,.24), rgba(139,92,246,.24));
+      border-color: rgba(66,214,255,.48);
+      box-shadow: 0 0 18px rgba(66,214,255,.16);
+    }
+
+    .company-chip, .indicator-chip, .quick-btn {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .input-row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--subtext);
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      border: 1px solid rgba(100, 209, 255, .16);
+      border-radius: 14px;
+      background: rgba(6, 15, 26, .76);
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .field textarea { min-height: 100px; resize: vertical; }
+
+    .drawer {
+      position: absolute;
+      top: 86px;
+      right: 16px;
+      width: 400px;
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 170px);
+      border-radius: 22px;
+      padding: 16px;
+      z-index: 40;
+      transform: translateY(-12px) scale(.98);
+      opacity: 0;
+      pointer-events: none;
+      transition: .22s ease;
+      overflow: auto;
+    }
+
+    .drawer.open {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer h3 {
+      margin: 0 0 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .drawer .note {
+      font-size: 12px;
+      color: var(--subtext);
+      line-height: 1.7;
+    }
+
+    .toast-wrap {
+      position: absolute;
+      right: 22px;
+      bottom: calc(var(--taskbar-h) + 26px);
+      display: grid;
+      gap: 10px;
+      z-index: 80;
+    }
+
+    .toast {
+      min-width: 280px;
+      max-width: 360px;
+      border-radius: 16px;
+      padding: 12px 14px;
+      animation: toastIn .25s ease;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .taskbar {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 12px;
+      height: var(--taskbar-h);
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      z-index: 35;
+      gap: 10px;
+    }
+
+    .task-left, .task-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .task-scroll {
+      display: flex;
+      gap: 8px;
+      overflow: auto;
+      padding-bottom: 4px;
+    }
+
+    .task-btn {
+      padding: 9px 12px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .task-btn.active {
+      background: linear-gradient(135deg, rgba(66,214,255,.22), rgba(139,92,246,.22));
+      border-color: rgba(66,214,255,.4);
+    }
+
+    .typewriter {
+      white-space: pre-wrap;
+      line-height: 1.75;
+      font-size: 13px;
+      min-height: 90px;
+    }
+
+    .split {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 320px 1fr;
+    }
+
+    .profile-card {
+      display: grid;
+      gap: 12px;
+    }
+
+    .profile-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .profile-avatar {
+      width: 68px;
+      height: 68px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      background: linear-gradient(135deg, rgba(66,214,255,.22), rgba(139,92,246,.24));
+      border: 1px solid rgba(66,214,255,.28);
+      box-shadow: var(--glow);
+    }
+
+    .timeline {
+      position: relative;
+      padding-left: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(66,214,255,.4), rgba(139,92,246,.25));
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 14px;
+      font-size: 13px;
+      color: var(--subtext);
+    }
+
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -2px;
+      top: 5px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4fd8ff;
+      box-shadow: 0 0 16px rgba(66,214,255,.4);
+    }
+
+    .chat-box {
+      display: grid;
+      gap: 12px;
+      min-height: 220px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .bubble {
+      max-width: 84%;
+      padding: 12px 14px;
+      border-radius: 16px;
+      line-height: 1.7;
+      font-size: 13px;
+      border: 1px solid rgba(100, 209, 255, .15);
+    }
+
+    .bubble.user {
+      justify-self: end;
+      background: linear-gradient(135deg, rgba(66,214,255,.18), rgba(139,92,246,.18));
+    }
+
+    .bubble.ai {
+      justify-self: start;
+      background: linear-gradient(180deg, rgba(17, 39, 66, .86), rgba(8, 20, 35, .78));
+    }
+
+    .footer-mini {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .resizer {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: 16px;
+      height: 16px;
+      opacity: .46;
+      pointer-events: none;
+      background: linear-gradient(135deg, transparent 0, transparent 45%, rgba(66,214,255,.65) 45%, rgba(66,214,255,.65) 55%, transparent 55%, transparent 100%);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1180px) {
+      .dock-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+      .content-grid.two, .content-grid.three, .split { grid-template-columns: 1fr; }
+      .topbar { grid-template-columns: 1fr; height: auto; }
+      .workspace { top: 122px; }
+    }
+
+    @media (max-width: 768px) {
+      .dock-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .menu-card { min-height: 120px; }
+      .window { left: 12px !important; top: 12px !important; width: calc(100% - 24px) !important; height: calc(100% - 24px) !important; }
+      .taskbar { left: 10px; right: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="cursorGlow"></div>
+  <div id="app">
+    <div class="topbar glass">
+      <div class="brand">
+        <div class="logo"><i class="fa-solid fa-chart-line"></i></div>
+        <div>
+          <h1>HR 智能决策驾驶舱</h1>
+          <p>企业人力资源数字化可视化及决策系统</p>
+        </div>
+      </div>
+      <div class="top-center">
+        <button class="mode-pill active" data-mode="local"><i class="fa-solid fa-shield-halved"></i> 本地规则模式</button>
+        <button class="mode-pill" data-mode="ai"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 增强模式</button>
+        <div class="status-chip"><i class="fa-solid fa-building"></i><span id="corpName">长安人力数字化中心 开发员：吴玉洁</span></div>
+        <div class="status-chip"><i class="fa-regular fa-clock"></i><span id="clock">--:--:--</span></div>
+      </div>
+      <div class="top-right">
+        <button class="top-btn"><i class="fa-regular fa-bell"></i></button>
+        <button class="top-btn" id="toggleDrawer"><i class="fa-solid fa-sliders"></i></button>
+        <div class="avatar">HR</div>
+      </div>
+    </div>
+
+    <div class="drawer glass" id="settingsDrawer">
+      <h3>
+        <span><i class="fa-solid fa-robot"></i> AI 配置中心</span>
+        <button class="mini-btn icon-only" id="closeDrawer"><i class="fa-solid fa-xmark"></i></button>
+      </h3>
+      <div class="panel">
+        <div class="field">
+          <label>运行模式</label>
+          <div class="switch-row">
+            <button class="mode-pill active" data-drawer-mode="local">本地规则模式</button>
+            <button class="mode-pill" data-drawer-mode="ai">AI 增强模式</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top: 12px;">
+        <div class="input-row">
+          <div class="field">
+            <label>AI 服务</label>
+            <select id="aiProvider">
+              <option>DeepSeek</option>
+              <option>豆包</option>
+              <option>ChatGPT</option>
+              <option>自定义 OpenAI 兼容接口</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>模型名称</label>
+            <input id="aiModel" value="deepseek-chat" />
+          </div>
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label>API Base URL</label>
+          <input id="aiBaseUrl" value="https://api.example.com/v1/chat/completions" />
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label>API Key</label>
+          <input id="aiKey" type="password" placeholder="请输入 API Key" />
+        </div>
+        <div class="footer-mini">
+          <div class="note">密钥仅保存在本地浏览器。调用第三方模型可能产生费用，请确保接口支持跨域或通过代理使用。</div>
+          <div class="switch-row">
+            <button class="action-btn" id="testApiBtn"><i class="fa-solid fa-plug-circle-check"></i> 测试连通性</button>
+            <button class="action-btn" id="saveApiBtn"><i class="fa-solid fa-floppy-disk"></i> 保存配置</button>
+          </div>
+        </div>
+        <div class="diag-item" style="margin-top: 12px;" id="apiTestResult">尚未测试连接。</div>
+      </div>
+      <div class="panel" style="margin-top: 12px;">
+        <h4><i class="fa-solid fa-palette"></i> 界面偏好</h4>
+        <div class="switch-row">
+          <button class="quick-btn active" data-setting="particles">粒子背景：开</button>
+          <button class="quick-btn active" data-setting="glow">发光动效：开</button>
+          <button class="quick-btn active" data-setting="charts">图表动画：开</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="workspace glass" id="workspace">
+      <button class="menu-toggle action-btn" id="toggleMenu"><i class="fa-solid fa-bars"></i> 主菜单</button>
+      <div class="dock-grid" id="menuGrid"></div>
+      <div class="window-layer" id="windowLayer"></div>
+    </div>
+
+    <div class="toast-wrap" id="toastWrap"></div>
+
+    <div class="taskbar glass">
+      <div class="task-left">
+        <div class="status-chip"><i class="fa-solid fa-wave-square"></i> <span id="systemState">系统状态：稳定</span></div>
+      </div>
+      <div class="task-scroll" id="taskScroll"></div>
+      <div class="task-right">
+        <div class="status-chip"><i class="fa-solid fa-database"></i> 模拟数据已加载</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      mode: (() => { try { return localStorage.getItem('hr_mode') || 'local'; } catch (e) { return 'local'; } })(),
+      menuCollapsed: false,
+      zIndex: 20,
+      windows: {},
+      taskOrder: [],
+      chartMap: {},
+      settings: (() => { try { return JSON.parse(localStorage.getItem('hr_settings') || '{"particles":true,"glow":true,"charts":true}'); } catch (e) { return {particles:true,glow:true,charts:true}; } })(),
+      aiConfig: (() => { try { return JSON.parse(localStorage.getItem('hr_ai_config') || '{"provider":"DeepSeek","baseUrl":"https://api.example.com/v1/chat/completions","key":"","model":"deepseek-chat"}'); } catch (e) { return {provider:'DeepSeek',baseUrl:'https://api.example.com/v1/chat/completions',key:'',model:'deepseek-chat'}; } })(),
+      importedWorkbook: null,
+      schemaProfile: null,
+      importedData: { employeeBase: null, payroll: null, finance: null }
+    };
+
+    const dataset = {
+      kpis: {
+        totalEmployees: 2864,
+        turnover: 8.7,
+        avgTenure: 5.4,
+        coreTalent: 312,
+        revenuePerCapita: 78.5,
+        profitPerCapita: 9.6,
+        costPerCapita: 28.4
+      },
+      structure: {
+        gender: [1548, 1316],
+        age: [286, 742, 953, 614, 269],
+        education: [284, 1042, 1226, 312],
+        tenure: [624, 801, 590, 486, 363],
+        depts: [
+          { name: '研发中心', value: 842 },
+          { name: '供应链', value: 468 },
+          { name: '销售中心', value: 536 },
+          { name: '制造系统', value: 604 },
+          { name: '职能平台', value: 414 }
+        ],
+        grades: [68, 226, 812, 1024, 734],
+        area: [
+          { name: '重庆', value: 1120 },
+          { name: '上海', value: 438 },
+          { name: '北京', value: 265 },
+          { name: '广州', value: 312 },
+          { name: '成都', value: 295 },
+          { name: '合肥', value: 434 }
+        ]
+      },
+      employees: [
+        { id: 'E1001', name: '张晨', dept: '研发中心', job: '高级算法工程师', grade: 'P6', age: 31, edu: '硕士', tenure: 4.3, perf: [88,92,91,94], potential: 86, tags: ['高潜', '算法', '带项目'], risk: '低', contract: '2027-08-31' },
+        { id: 'E1023', name: '李然', dept: '销售中心', job: '区域销售经理', grade: 'M2', age: 36, edu: '本科', tenure: 6.2, perf: [81,79,84,82], potential: 75, tags: ['销售', '客户经营', '跨区协同'], risk: '中', contract: '2026-11-30' },
+        { id: 'E1188', name: '王可', dept: '职能平台', job: 'HRBP', grade: 'P5', age: 29, edu: '硕士', tenure: 3.1, perf: [90,91,89,93], potential: 88, tags: ['组织发展', '盘点', '数据分析'], risk: '低', contract: '2026-05-31' },
+        { id: 'E1249', name: '赵衡', dept: '制造系统', job: '精益改善主管', grade: 'M1', age: 39, edu: '本科', tenure: 9.2, perf: [77,75,73,76], potential: 62, tags: ['精益', '流程优化'], risk: '中', contract: '2026-06-30' }
+      ],
+      talentMatrix: [
+        ['张晨', 91, 86, '研发中心'], ['李然', 82, 75, '销售中心'], ['王可', 93, 88, '职能平台'], ['赵衡', 76, 62, '制造系统'],
+        ['周宁', 88, 80, '供应链'], ['陈语', 79, 69, '研发中心'], ['许航', 95, 90, '研发中心'], ['何菲', 70, 56, '职能平台']
+      ],
+      succession: [
+        { role: '研发总监', owner: '徐川', coverage: 0.5, candidate: '张晨 / 许航', risk: '中' },
+        { role: '销售总监', owner: '刘骁', coverage: 1, candidate: '李然', risk: '低' },
+        { role: '供应链负责人', owner: '高峰', coverage: 0, candidate: '暂无', risk: '高' }
+      ],
+      benchmark: {
+        years: ['2021','2022','2023','2024'],
+        self: { name: '本公司', revenuePerCapita: [68,72,76,78.5], costPerCapita: [25,26,27,28.4], profitPerCapita: [7.2,8.1,9.1,9.6] },
+        peers: {
+          '长久物流': { revenuePerCapita: [71,74,79,82], costPerCapita: [24,25,26.5,27], profitPerCapita: [8,8.6,9.8,10.3] },
+          '西上海': { revenuePerCapita: [64,69,73,75], costPerCapita: [23,24,25,26], profitPerCapita: [6.8,7.2,8.1,8.6] },
+          '原尚股份': { revenuePerCapita: [61,65,69,72], costPerCapita: [22,23,23.8,24.5], profitPerCapita: [5.9,6.4,7.1,7.8] }
+        }
+      },
+      deptEfficiency: {
+        names: ['研发中心','销售中心','供应链','制造系统','职能平台'],
+        revenue: [92, 108, 74, 66, 59],
+        cost: [34, 36, 29, 31, 28]
+      },
+      orgHealth: {
+        staffing: 92,
+        managerSpan: [6,7,5,8,4],
+        layers: [4,5,3,4,4],
+        overUnder: [12,-8,5,-6,9],
+        names: ['研发', '销售', '供应链', '制造', '职能']
+      },
+      aiInsights: {
+        local: '基于当前结构、人效与盘点结果，系统识别出三个优先议题：\n1. 关键岗位继任覆盖不足，尤其是供应链负责人岗位。\n2. 年轻员工占比偏低，组织年轻化不足。\n3. 人均收入与对标样本相比仍有差距，建议结合岗位结构与流程效率联动优化。',
+        ai: 'AI 综合分析认为：\n1. 人才梯队和组织效率是当前最值得投入的两个方向。\n2. 研发中心具备较强人才密度，但高潜人才的系统性培养机制仍可加强。\n3. 建议将“关键岗位继任 + 人效对标 + 组织设计”形成联动分析闭环，优先从高成本、低产出部门切入优化。'
+      }
+    };
+
+
+    const standardSchema = {
+  "name": "长安人力资源系统数据标准",
+  "sheetNames": [
+    "封面",
+    "总表",
+    "企业信息",
+    "部门信息",
+    "岗位信息",
+    "基础信息",
+    "政治面貌",
+    "教育经历",
+    "培训经历",
+    "银行账户",
+    "职业技能等级",
+    "专业技术职务",
+    "奖励信息",
+    "荣誉奖励",
+    "处理处分信息",
+    "家庭及社会关系",
+    "因私出国（境）信息",
+    "劳动合同信息",
+    "协议信息",
+    "通讯信息",
+    "人才称号与评聘信息",
+    "专业技能成果",
+    "人才考核",
+    "语言能力",
+    "任职信息",
+    "试用信息",
+    "工作履历信息",
+    "其他任职信息",
+    "管理职务信息",
+    "专业序列信息",
+    "干部兼职信息",
+    "干部考核结果",
+    "绩效信息",
+    "董监高信息",
+    "字典"
+  ],
+  "summary": [
+    {
+      "group": "组织结构信息",
+      "code": "A01",
+      "name": "A01企业信息",
+      "itemCount": 32
+    },
+    {
+      "group": "组织结构信息",
+      "code": "A02",
+      "name": "A02部门信息",
+      "itemCount": 16
+    },
+    {
+      "group": "组织结构信息",
+      "code": "A03",
+      "name": "A03岗位信息",
+      "itemCount": 9
+    },
+    {
+      "group": "人员信息",
+      "code": "B01",
+      "name": "B01基础信息",
+      "itemCount": 63
+    },
+    {
+      "group": "人员信息",
+      "code": "B02",
+      "name": "B02政治面貌信息",
+      "itemCount": 6
+    },
+    {
+      "group": "人员信息",
+      "code": "B03",
+      "name": "B03教育经历信息",
+      "itemCount": 28
+    },
+    {
+      "group": "人员信息",
+      "code": "B04",
+      "name": "B04培训经历",
+      "itemCount": 18
+    },
+    {
+      "group": "人员信息",
+      "code": "B05",
+      "name": "B05银行账户",
+      "itemCount": 7
+    },
+    {
+      "group": "人员信息",
+      "code": "B06",
+      "name": "B06职业技能等级",
+      "itemCount": 13
+    },
+    {
+      "group": "人员信息",
+      "code": "B07",
+      "name": "B07专业技术职务",
+      "itemCount": 10
+    },
+    {
+      "group": "人员信息",
+      "code": "B08",
+      "name": "B08奖励信息",
+      "itemCount": 7
+    },
+    {
+      "group": "人员信息",
+      "code": "B09",
+      "name": "B09荣誉奖励",
+      "itemCount": 12
+    },
+    {
+      "group": "人员信息",
+      "code": "B10",
+      "name": "B10处理处分",
+      "itemCount": 11
+    },
+    {
+      "group": "人员信息",
+      "code": "B11",
+      "name": "B11家庭及社会关系",
+      "itemCount": 16
+    },
+    {
+      "group": "人员信息",
+      "code": "B12",
+      "name": "B12因私出国（境）信息",
+      "itemCount": 8
+    },
+    {
+      "group": "人员信息",
+      "code": "B13",
+      "name": "B13劳动合同",
+      "itemCount": 23
+    },
+    {
+      "group": "人员信息",
+      "code": "B14",
+      "name": "B14协议信息",
+      "itemCount": 13
+    },
+    {
+      "group": "人员信息",
+      "code": "B15",
+      "name": "B15通讯信息",
+      "itemCount": 8
+    },
+    {
+      "group": "人员信息",
+      "code": "B16",
+      "name": "B16人才称号与评聘信息",
+      "itemCount": 23
+    },
+    {
+      "group": "人员信息",
+      "code": "B17",
+      "name": "B17人才考核",
+      "itemCount": 6
+    },
+    {
+      "group": "人员信息",
+      "code": "B18",
+      "name": "B18专业技能成果",
+      "itemCount": 3
+    },
+    {
+      "group": "人员信息",
+      "code": "B19",
+      "name": "B19语言能力",
+      "itemCount": 3
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C01",
+      "name": "C01任职信息",
+      "itemCount": 29
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C02",
+      "name": "C02试用信息",
+      "itemCount": 7
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C03",
+      "name": "C03工作履历信息",
+      "itemCount": 10
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C04",
+      "name": "C04其他任职信息",
+      "itemCount": 29
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C05",
+      "name": "C05管理职务信息",
+      "itemCount": 7
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C06",
+      "name": "C06专业序列信息",
+      "itemCount": 6
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C07",
+      "name": "C07干部兼职信息",
+      "itemCount": 7
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C08",
+      "name": "C08干部考核结果",
+      "itemCount": 7
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C09",
+      "name": "C09绩效信息",
+      "itemCount": 6
+    },
+    {
+      "group": "人员异动信息",
+      "code": "C10",
+      "name": "C10董监高信息",
+      "itemCount": 13
+    }
+  ],
+  "keyFields": {
+    "基础信息": [
+      "code",
+      "name",
+      "sex",
+      "birthDate",
+      "age",
+      "highestEdu",
+      "dept",
+      "post",
+      "empCategory"
+    ],
+    "部门信息": [
+      "code",
+      "name",
+      "parentid",
+      "deptCategory",
+      "deptRank"
+    ],
+    "岗位信息": [
+      "code",
+      "name",
+      "dept",
+      "sequence"
+    ],
+    "绩效信息": [
+      "cheYear",
+      "chePeriod",
+      "score",
+      "cheResult"
+    ],
+    "任职信息": [
+      "beginDate",
+      "endDate",
+      "trnsEvent",
+      "trnsType",
+      "orgVid",
+      "deptVid",
+      "postVid"
+    ],
+    "人才称号与评聘信息": [
+      "talentLevel",
+      "talentTitle",
+      "selecTime"
+    ],
+    "职业技能等级": [
+      "vocalSkillName",
+      "vocaSkillLevel",
+      "acquisitionTime"
+    ],
+    "专业技术职务": [
+      "title",
+      "proTechLevel",
+      "beginDate",
+      "ratingOrg"
+    ]
+  }
+};
+    state.schemaProfile = standardSchema;
+
+    function normalizeNumber(val) {
+      if (val === null || val === undefined || val === '') return null;
+      if (typeof val === 'number' && !isNaN(val)) return val;
+      const str = String(val).replace(/,/g, '').trim();
+      const match = str.match(/-?\d+(?:\.\d+)?/);
+      return match ? Number(match[0]) : null;
+    }
+
+    function safeAvg(arr) {
+      const vals = arr.filter(v => typeof v === 'number' && !isNaN(v));
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    }
+
+    function getRowValue(row, aliases) {
+      const keys = Object.keys(row || {});
+      for (const alias of aliases) {
+        const aliasLower = alias.toLowerCase();
+        const found = keys.find(k => String(k).toLowerCase().includes(aliasLower));
+        if (found && row[found] !== undefined && row[found] !== null && row[found] !== '') return row[found];
+      }
+      return '';
+    }
+
+    function uniqueBy(list, keyFn) {
+      const seen = new Set();
+      return list.filter(item => {
+        const key = keyFn(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function computeDeptEfficiencyFromStructure() {
+      const depts = dataset.structure.depts && dataset.structure.depts.length ? dataset.structure.depts : [{ name: '默认部门', value: dataset.kpis.totalEmployees || 1 }];
+      const baseRevenue = dataset.kpis.revenuePerCapita || 78.5;
+      const baseCost = dataset.kpis.costPerCapita || 28.4;
+      const total = depts.reduce((a, d) => a + (d.value || 0), 0) || 1;
+      dataset.deptEfficiency = {
+        names: depts.map(d => d.name),
+        revenue: depts.map((d, i) => Number((baseRevenue * (0.86 + (d.value / total) * 1.6 + i * 0.03)).toFixed(1))),
+        cost: depts.map((d, i) => Number((baseCost * (0.84 + (d.value / total) * 1.1 + i * 0.02)).toFixed(1)))
+      };
+    }
+
+    
+    function isChanganStandardWorkbook(workbook) {
+      const required = ['总表', '基础信息', '部门信息', '岗位信息', '任职信息', '绩效信息', '字典'];
+      return required.every(name => workbook.SheetNames.includes(name));
+    }
+
+    function summarizeWorkbookRows(workbook) {
+      return workbook.SheetNames.reduce((sum, sheetName) => {
+        const ws = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        return sum + rows.length;
+      }, 0);
+    }
+
+    function applyChanganSchemaProfile(workbook) {
+      const recognizedSheets = standardSchema.sheetNames.filter(name => workbook.SheetNames.includes(name));
+      state.schemaProfile = standardSchema;
+      state.importedWorkbook = {
+        type: 'schema-template',
+        title: standardSchema.name,
+        sheetNames: workbook.SheetNames.slice(),
+        rowCount: summarizeWorkbookRows(workbook),
+        recognizedSheets,
+        schemaGroups: standardSchema.summary.length,
+        keyFields: standardSchema.keyFields
+      };
+    }
+
+    function deriveDatasetFromWorkbook(workbook) {
+      if (isChanganStandardWorkbook(workbook)) {
+        applyChanganSchemaProfile(workbook);
+        return;
+      }
+
+      const allRows = [];
+      workbook.SheetNames.forEach(sheetName => {
+        const ws = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        rows.forEach(r => allRows.push({ __sheet: sheetName, ...r }));
+      });
+
+      state.importedWorkbook = {
+        type: 'data-workbook',
+        sheetNames: workbook.SheetNames.slice(),
+        rowCount: allRows.length
+      };
+
+      const employeeRows = allRows.filter(row => {
+        return getRowValue(row, ['姓名', '员工姓名', 'name']) || getRowValue(row, ['部门', '所属部门', 'department', 'dept']) || getRowValue(row, ['工号', '员工编号', 'emp', 'code']);
+      });
+
+      if (employeeRows.length) {
+        const employees = uniqueBy(employeeRows.map((row, idx) => {
+          const age = normalizeNumber(getRowValue(row, ['年龄', 'age', 'birthDate'])) ?? (26 + (idx % 12));
+          const tenure = normalizeNumber(getRowValue(row, ['司龄', '工龄', 'tenure'])) ?? Number((1 + (idx % 8) * 0.8).toFixed(1));
+          const perfVal = normalizeNumber(getRowValue(row, ['绩效', '绩效结果', '绩效得分', 'performance', 'score'])) ?? (76 + (idx % 18));
+          const potentialVal = normalizeNumber(getRowValue(row, ['潜力', '潜力评分', 'potential'])) ?? (68 + (idx % 20));
+          const dept = String(getRowValue(row, ['部门', '所属部门', 'department', 'dept']) || '未分配部门');
+          const name = String(getRowValue(row, ['姓名', '员工姓名', 'name']) || `员工${idx + 1}`);
+          const id = String(getRowValue(row, ['工号', '员工编号', 'empid', 'employee id', 'code']) || `IMP${idx + 1}`);
+          const edu = String(getRowValue(row, ['学历', '最高学历', 'education', 'highestEdu']) || '本科');
+          const risk = String(getRowValue(row, ['风险', '离职风险', 'risk']) || (potentialVal >= 85 ? '低' : '中'));
+          const tags = [];
+          if (potentialVal >= 85) tags.push('高潜');
+          if (perfVal >= 90) tags.push('高绩效');
+          const job = String(getRowValue(row, ['岗位', '职位', 'job', 'post']) || '岗位待识别');
+          const grade = String(getRowValue(row, ['职级', '级别', 'grade', 'adminLevel']) || 'P5');
+          return {
+            id,
+            name,
+            dept,
+            job,
+            grade,
+            age,
+            edu,
+            tenure,
+            perf: [Math.max(60, perfVal - 3), Math.max(60, perfVal - 1), perfVal, Math.min(100, perfVal + 1)],
+            potential: potentialVal,
+            tags: tags.length ? tags : ['待观察'],
+            risk,
+            contract: String(getRowValue(row, ['合同到期', '合同结束', 'contract', 'endDate']) || '2026-12-31')
+          };
+        }), e => `${e.id}|${e.name}`);
+
+        dataset.employees = employees;
+        dataset.kpis.totalEmployees = employees.length || dataset.kpis.totalEmployees;
+        dataset.kpis.avgTenure = Number(safeAvg(employees.map(e => e.tenure)).toFixed(1));
+        dataset.kpis.coreTalent = employees.filter(e => (e.potential || 0) >= 85).length;
+
+        const ageBuckets = [0, 0, 0, 0, 0];
+        const eduMap = { '大专及以下': 0, '本科': 0, '硕士': 0, '博士': 0 };
+        const deptMap = {};
+        const gradeMap = {};
+        employees.forEach(e => {
+          if (e.age < 25) ageBuckets[0]++; else if (e.age <= 30) ageBuckets[1]++; else if (e.age <= 35) ageBuckets[2]++; else if (e.age <= 40) ageBuckets[3]++; else ageBuckets[4]++;
+          if (/博士/.test(e.edu)) eduMap['博士']++;
+          else if (/硕士|研究生/.test(e.edu)) eduMap['硕士']++;
+          else if (/本科/.test(e.edu)) eduMap['本科']++;
+          else eduMap['大专及以下']++;
+          deptMap[e.dept] = (deptMap[e.dept] || 0) + 1;
+          gradeMap[e.grade] = (gradeMap[e.grade] || 0) + 1;
+        });
+        dataset.structure.age = ageBuckets;
+        dataset.structure.education = [eduMap['大专及以下'], eduMap['本科'], eduMap['硕士'], eduMap['博士']];
+        dataset.structure.depts = Object.entries(deptMap).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([name, value]) => ({ name, value }));
+        const gradeEntries = Object.entries(gradeMap).sort((a,b)=>b[1]-a[1]).slice(0, 5);
+        dataset.structure.grades = gradeEntries.map(item => item[1]);
+        dataset.structure.gradeLabels = gradeEntries.map(item => item[0]);
+      }
+
+      const financialRows = allRows.filter(row => {
+        return (getRowValue(row, ['年份', 'year']) || getRowValue(row, ['年度', 'cheYear'])) &&
+          (getRowValue(row, ['营业收入', '收入', 'revenue']) || getRowValue(row, ['营业成本', '总成本', 'cost']) || getRowValue(row, ['净利润', '利润', 'profit']));
+      });
+
+      if (financialRows.length) {
+        const sorted = financialRows.map(row => {
+          const year = String(getRowValue(row, ['年份', 'year', '年度', 'cheYear']) || '');
+          return {
+            year,
+            revenue: normalizeNumber(getRowValue(row, ['营业收入', '收入', 'revenue'])),
+            cost: normalizeNumber(getRowValue(row, ['营业成本', '总成本', 'cost'])),
+            profit: normalizeNumber(getRowValue(row, ['净利润', '利润', 'profit'])),
+            headcount: normalizeNumber(getRowValue(row, ['员工人数', '人数', 'headcount'])) || dataset.kpis.totalEmployees || 1
+          };
+        }).filter(item => item.year).sort((a, b) => String(a.year).localeCompare(String(b.year)));
+
+        if (sorted.length) {
+          dataset.benchmark.years = sorted.map(i => i.year);
+          dataset.benchmark.self = {
+            name: '本公司',
+            revenuePerCapita: sorted.map(i => Number((((i.revenue ?? 0) / i.headcount) || dataset.kpis.revenuePerCapita).toFixed(1))),
+            costPerCapita: sorted.map(i => Number((((i.cost ?? 0) / i.headcount) || dataset.kpis.costPerCapita).toFixed(1))),
+            profitPerCapita: sorted.map(i => Number((((i.profit ?? 0) / i.headcount) || dataset.kpis.profitPerCapita).toFixed(1)))
+          };
+          dataset.kpis.revenuePerCapita = dataset.benchmark.self.revenuePerCapita.at(-1) || dataset.kpis.revenuePerCapita;
+          dataset.kpis.costPerCapita = dataset.benchmark.self.costPerCapita.at(-1) || dataset.kpis.costPerCapita;
+          dataset.kpis.profitPerCapita = dataset.benchmark.self.profitPerCapita.at(-1) || dataset.kpis.profitPerCapita;
+        }
+      }
+
+      computeDeptEfficiencyFromStructure();
+    }
+
+
+    computeDeptEfficiencyFromStructure();
+
+    const menuModules = [
+      { id: 'import', title: '数据导入', icon: 'fa-file-import', desc: '接入员工、组织、绩效、培训等多源数据' },
+      { id: 'structure', title: '员工结构', icon: 'fa-users-viewfinder', desc: '年龄、学历、司龄、职级、地域多维结构洞察' },
+      { id: 'talent', title: '人才盘点', icon: 'fa-chess-board', desc: '九宫格盘点、梯队诊断、关键岗位继任分析' },
+      { id: 'profile', title: '人才画像', icon: 'fa-id-card-clip', desc: '单员工 360° 画像与发展建议' },
+      { id: 'efficiency', title: '人效分析', icon: 'fa-chart-column', desc: '人均收入、人均利润、人均成本与部门对比' },
+      { id: 'benchmark', title: '人效对标', icon: 'fa-scale-balanced', desc: '与同类型上市企业进行年度人效对标' },
+      { id: 'org', title: '组织诊断', icon: 'fa-sitemap', desc: '编制、层级、管理幅度、冗余与流动分析' },
+      { id: 'ai', title: 'AI 洞察中心', icon: 'fa-sparkles', desc: '自然语言提问、结论摘要与行动建议' },
+      { id: 'settings', title: '系统设置', icon: 'fa-gears', desc: '模式、主题、API、布局与演示设置' }
+    ];
+
+    const menuGrid = document.getElementById('menuGrid');
+    const windowLayer = document.getElementById('windowLayer');
+    const taskScroll = document.getElementById('taskScroll');
+    const toastWrap = document.getElementById('toastWrap');
+
+    function init() {
+      applyMode(state.mode);
+      loadSettings();
+      renderMenu();
+      bindTopbar();
+      startClock();
+      bindCursorGlow();
+      toast('欢迎进入 HR 智能决策驾驶舱', '已加载演示数据，可直接打开各模块查看。');
+      setTimeout(() => toast('模式说明', '当前可在顶部切换本地规则模式和 AI 增强模式。'), 900);
+    }
+
+    function renderMenu() {
+      menuGrid.innerHTML = menuModules.map(m => `
+        <div class="menu-card glass" data-open="${m.id}">
+          <div class="icon"><i class="fa-solid ${m.icon}"></i></div>
+          <h3>${m.title}</h3>
+          <p>${m.desc}</p>
+        </div>
+      `).join('');
+
+      menuGrid.querySelectorAll('[data-open]').forEach(card => {
+        card.addEventListener('click', () => openWindow(card.dataset.open));
+        card.addEventListener('mousemove', tiltCard);
+        card.addEventListener('mouseleave', resetTiltCard);
+      });
+    }
+
+    function tiltCard(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const rotateY = ((x / rect.width) - 0.5) * 8;
+      const rotateX = -((y / rect.height) - 0.5) * 8;
+      e.currentTarget.style.transform = `translateY(-6px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    }
+
+    function resetTiltCard(e) {
+      e.currentTarget.style.transform = '';
+    }
+
+    function bindTopbar() {
+      document.querySelectorAll('.mode-pill[data-mode]').forEach(btn => btn.addEventListener('click', () => applyMode(btn.dataset.mode)));
+      document.getElementById('toggleDrawer').addEventListener('click', () => document.getElementById('settingsDrawer').classList.toggle('open'));
+      document.getElementById('closeDrawer').addEventListener('click', () => document.getElementById('settingsDrawer').classList.remove('open'));
+      document.getElementById('toggleMenu').addEventListener('click', () => {
+        state.menuCollapsed = !state.menuCollapsed;
+        menuGrid.classList.toggle('collapsed', state.menuCollapsed);
+      });
+
+      document.querySelectorAll('[data-drawer-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-drawer-mode]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          applyMode(btn.dataset.drawerMode);
+        });
+      });
+
+      document.getElementById('testApiBtn').addEventListener('click', testApiConnection);
+      document.getElementById('saveApiBtn').addEventListener('click', saveApiConfig);
+      document.querySelectorAll('.quick-btn[data-setting]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const k = btn.dataset.setting;
+          state.settings[k] = !state.settings[k];
+          btn.classList.toggle('active', state.settings[k]);
+          btn.textContent = btn.textContent.split('：')[0] + '：' + (state.settings[k] ? '开' : '关');
+          try { localStorage.setItem('hr_settings', JSON.stringify(state.settings)); } catch (e) {}
+        });
+      });
+    }
+
+    function loadSettings() {
+      document.getElementById('aiProvider').value = state.aiConfig.provider;
+      document.getElementById('aiBaseUrl').value = state.aiConfig.baseUrl;
+      document.getElementById('aiKey').value = state.aiConfig.key;
+      document.getElementById('aiModel').value = state.aiConfig.model;
+      document.querySelectorAll('.quick-btn[data-setting]').forEach(btn => {
+        const k = btn.dataset.setting;
+        btn.classList.toggle('active', !!state.settings[k]);
+        btn.textContent = btn.textContent.split('：')[0] + '：' + (state.settings[k] ? '开' : '关');
+      });
+      document.querySelectorAll('[data-drawer-mode]').forEach(btn => btn.classList.toggle('active', btn.dataset.drawerMode === state.mode));
+    }
+
+    function applyMode(mode) {
+      state.mode = mode;
+      try { localStorage.setItem('hr_mode', mode); } catch (e) {}
+      document.querySelectorAll('.mode-pill[data-mode]').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+      document.getElementById('systemState').textContent = mode === 'ai' ? '系统状态：AI 增强模式' : '系统状态：本地规则模式';
+      Object.values(state.windows).forEach(w => updateWindowModeHint(w));
+    }
+
+    function saveApiConfig() {
+      state.aiConfig = {
+        provider: document.getElementById('aiProvider').value,
+        baseUrl: document.getElementById('aiBaseUrl').value,
+        key: document.getElementById('aiKey').value,
+        model: document.getElementById('aiModel').value
+      };
+      try { localStorage.setItem('hr_ai_config', JSON.stringify(state.aiConfig)); } catch (e) {}
+      toast('AI 配置已保存', `${state.aiConfig.provider} / ${state.aiConfig.model}`);
+    }
+
+    function testApiConnection() {
+      const provider = document.getElementById('aiProvider').value;
+      const key = document.getElementById('aiKey').value.trim();
+      const baseUrl = document.getElementById('aiBaseUrl').value.trim();
+      const model = document.getElementById('aiModel').value.trim();
+      const target = document.getElementById('apiTestResult');
+      if (!key || !baseUrl || !model) {
+        target.textContent = '测试失败：请完整填写 Base URL、API Key、模型名称。';
+        target.className = 'diag-item';
+        toast('连接测试失败', '请先填写完整的 AI 配置信息。');
+        return;
+      }
+      target.textContent = '正在测试连接，请稍候...';
+      setTimeout(() => {
+        target.innerHTML = `<strong>连接成功：</strong> 已模拟连接到 ${provider}，模型 ${model} 可用。后续可替换为真实接口请求逻辑。`;
+        toast('连接成功', `${provider} 接口连通性通过（模拟）。`);
+      }, 900);
+    }
+
+    function toast(title, msg) {
+      const el = document.createElement('div');
+      el.className = 'toast glass';
+      el.innerHTML = `<strong>${title}</strong><div class="subtle" style="margin-top:6px;font-size:12px;line-height:1.7;">${msg}</div>`;
+      toastWrap.appendChild(el);
+      setTimeout(() => el.remove(), 3600);
+    }
+
+
+    document.addEventListener('fullscreenchange', () => {
+      Object.values(state.windows).forEach(w => {
+        const active = document.fullscreenElement === w.el;
+        w.fullscreen = active;
+        w.el.classList.toggle('fullscreen', active);
+        resizeChartsIn(w.el);
+      });
+    });
+
+    function startClock() {
+      const el = document.getElementById('clock');
+      const tick = () => {
+        const now = new Date();
+        el.textContent = now.toLocaleString('zh-CN', { hour12: false });
+      };
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    function bindCursorGlow() {
+      const glow = document.getElementById('cursorGlow');
+      window.addEventListener('mousemove', e => {
+        glow.style.left = e.clientX + 'px';
+        glow.style.top = e.clientY + 'px';
+      });
+    }
+
+    function openWindow(moduleId) {
+      if (state.windows[moduleId]) {
+        restoreWindow(moduleId);
+        activateWindow(moduleId);
+        return;
+      }
+      const mod = menuModules.find(m => m.id === moduleId);
+      const win = document.createElement('div');
+      win.className = 'window glass active';
+      win.dataset.id = moduleId;
+      win.style.width = (moduleId === 'ai' ? 760 : 720) + 'px';
+      win.style.height = (moduleId === 'profile' ? 620 : 540) + 'px';
+      win.style.left = (40 + Object.keys(state.windows).length * 28) + 'px';
+      win.style.top = (44 + Object.keys(state.windows).length * 24) + 'px';
+      win.style.zIndex = ++state.zIndex;
+      win.innerHTML = `
+        <div class="window-header">
+          <div class="window-title"><i class="fa-solid ${mod.icon}"></i><span>${mod.title}</span></div>
+          <div class="window-controls">
+            <button class="ctrl-btn" data-act="back"><i class="fa-solid fa-arrow-left"></i> 返回</button>
+            <button class="ctrl-btn" data-act="next">下一步 <i class="fa-solid fa-arrow-right"></i></button>
+            <button class="ctrl-btn" data-act="confirm"><i class="fa-solid fa-check"></i> 确定</button>
+            <button class="mini-btn icon-only" data-act="min"><i class="fa-solid fa-window-minimize"></i></button>
+            <button class="mini-btn icon-only" data-act="full"><i class="fa-solid fa-expand"></i></button>
+            <button class="mini-btn icon-only" data-act="close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="window-body"></div>
+        <div class="resizer"></div>
+      `;
+      windowLayer.appendChild(win);
+      state.windows[moduleId] = { id: moduleId, el: win, minimized: false, fullscreen: false, step: 1, lastRect: null };
+      renderWindowContent(moduleId);
+      bindWindowControls(win, moduleId);
+      makeInteract(win);
+      addTaskButton(moduleId, mod.title, mod.icon);
+      activateWindow(moduleId);
+      updateWindowModeHint(state.windows[moduleId]);
+    }
+
+    function bindWindowControls(win, moduleId) {
+      win.addEventListener('mousedown', () => activateWindow(moduleId));
+      win.querySelectorAll('[data-act]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const act = btn.dataset.act;
+          if (act === 'close') closeWindow(moduleId);
+          if (act === 'min') minimizeWindow(moduleId);
+          if (act === 'full') toggleFullWindow(moduleId);
+          if (act === 'back') stepWindow(moduleId, -1);
+          if (act === 'next') stepWindow(moduleId, 1);
+          if (act === 'confirm') confirmWindow(moduleId);
+        });
+      });
+    }
+
+    function makeInteract(win) {
+      interact(win)
+        .draggable({
+          allowFrom: '.window-header',
+          listeners: {
+            move(event) {
+              const target = event.target;
+              if (target.classList.contains('fullscreen')) return;
+              const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+              const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+              target.style.transform = `translate(${x}px, ${y}px)`;
+              target.setAttribute('data-x', x);
+              target.setAttribute('data-y', y);
+            }
+          }
+        })
+        .resizable({ edges: { left: false, right: true, bottom: true, top: false } })
+        .on('resizemove', event => {
+          const target = event.target;
+          if (target.classList.contains('fullscreen')) return;
+          let x = parseFloat(target.getAttribute('data-x')) || 0;
+          let y = parseFloat(target.getAttribute('data-y')) || 0;
+          target.style.width = `${event.rect.width}px`;
+          target.style.height = `${event.rect.height}px`;
+          x += event.deltaRect.left;
+          y += event.deltaRect.top;
+          target.style.transform = `translate(${x}px, ${y}px)`;
+          target.setAttribute('data-x', x);
+          target.setAttribute('data-y', y);
+          resizeChartsIn(target);
+        });
+    }
+
+    function activateWindow(moduleId) {
+      Object.values(state.windows).forEach(w => w.el.classList.remove('active'));
+      const win = state.windows[moduleId];
+      if (!win) return;
+      win.el.classList.add('active');
+      win.el.style.zIndex = ++state.zIndex;
+      document.querySelectorAll('.task-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.id === moduleId));
+    }
+
+    function closeWindow(moduleId) {
+      const win = state.windows[moduleId];
+      if (!win) return;
+      if (document.fullscreenElement === win.el) { document.exitFullscreen?.(); }
+      win.el.style.opacity = '0';
+      win.el.style.transform += ' scale(.96)';
+      setTimeout(() => {
+        win.el.remove();
+        delete state.windows[moduleId];
+        document.querySelector(`.task-btn[data-id="${moduleId}"]`)?.remove();
+      }, 180);
+    }
+
+    function minimizeWindow(moduleId) {
+      const win = state.windows[moduleId];
+      if (!win) return;
+      if (document.fullscreenElement === win.el) { document.exitFullscreen?.(); }
+      win.minimized = true;
+      win.el.classList.add('minimized');
+      document.querySelector(`.task-btn[data-id="${moduleId}"]`)?.classList.remove('active');
+    }
+
+    function restoreWindow(moduleId) {
+      const win = state.windows[moduleId];
+      if (!win) return;
+      win.minimized = false;
+      win.el.classList.remove('minimized');
+      activateWindow(moduleId);
+    }
+
+    function toggleFullWindow(moduleId) {
+      const win = state.windows[moduleId];
+      if (!win) return;
+      const target = win.el;
+      if (document.fullscreenElement === target) {
+        document.exitFullscreen?.();
+        win.fullscreen = false;
+        target.classList.remove('fullscreen');
+        resizeChartsIn(target);
+        return;
+      }
+      if (document.fullscreenElement && document.fullscreenElement !== target) {
+        document.exitFullscreen?.();
+      }
+      win.fullscreen = true;
+      target.classList.add('fullscreen');
+      if (target.requestFullscreen) {
+        target.requestFullscreen().catch(() => {
+          resizeChartsIn(target);
+        });
+      }
+      resizeChartsIn(target);
+    }
+
+    function stepWindow(moduleId, delta) {
+      const win = state.windows[moduleId];
+      if (!win) return;
+      win.step = Math.max(1, Math.min(3, win.step + delta));
+      const stepTag = win.el.querySelector('.step-hint');
+      if (stepTag) stepTag.textContent = `步骤 ${win.step}/3`;
+      toast('步骤切换', `${menuModules.find(m => m.id === moduleId).title} 已切换到步骤 ${win.step}`);
+    }
+
+    function confirmWindow(moduleId) {
+      toast('操作已确认', `${menuModules.find(m => m.id === moduleId).title} 当前配置已记录。`);
+    }
+
+    function addTaskButton(id, title, icon) {
+      const btn = document.createElement('button');
+      btn.className = 'task-btn';
+      btn.dataset.id = id;
+      btn.innerHTML = `<i class="fa-solid ${icon}"></i><span>${title}</span>`;
+      btn.addEventListener('click', () => restoreWindow(id));
+      taskScroll.appendChild(btn);
+      state.taskOrder.push(id);
+    }
+
+    function updateWindowModeHint(winObj) {
+      const hint = winObj.el.querySelector('.mode-hint');
+      if (hint) {
+        hint.textContent = state.mode === 'ai' ? 'AI 增强模式已启用' : '本地规则模式已启用';
+      }
+      const aiOnly = winObj.el.querySelectorAll('[data-ai-note]');
+      aiOnly.forEach(el => {
+        el.textContent = state.mode === 'ai' ? el.dataset.aiNote : el.dataset.localNote;
+      });
+    }
+
+    function resizeChartsIn(container) {
+      container.querySelectorAll('.chart').forEach(dom => {
+        const chart = echarts.getInstanceByDom(dom);
+        if (chart) chart.resize();
+      });
+    }
+
+
+    function rerenderOpenWindows() {
+      Object.keys(state.windows).forEach(moduleId => {
+        const win = state.windows[moduleId];
+        if (!win || !win.el) return;
+        const active = win.el.classList.contains('active');
+        const minimized = win.el.classList.contains('minimized');
+        const fullscreen = win.el.classList.contains('fullscreen');
+        const z = win.el.style.zIndex;
+        renderWindowContent(moduleId);
+        if (active) win.el.classList.add('active');
+        if (minimized) win.el.classList.add('minimized');
+        if (fullscreen) win.el.classList.add('fullscreen');
+        if (z) win.el.style.zIndex = z;
+      });
+    }
+
+    function renderWindowContent(moduleId) {
+      const body = state.windows[moduleId].el.querySelector('.window-body');
+      if (moduleId === 'import') body.innerHTML = renderImportModule();
+      if (moduleId === 'structure') body.innerHTML = renderStructureModule();
+      if (moduleId === 'talent') body.innerHTML = renderTalentModule();
+      if (moduleId === 'profile') body.innerHTML = renderProfileModule();
+      if (moduleId === 'efficiency') body.innerHTML = renderEfficiencyModule();
+      if (moduleId === 'benchmark') body.innerHTML = renderBenchmarkModule();
+      if (moduleId === 'org') body.innerHTML = renderOrgModule();
+      if (moduleId === 'ai') body.innerHTML = renderAiModule();
+      if (moduleId === 'settings') body.innerHTML = renderSettingsModule();
+      bindWindowInnerEvents(moduleId, body);
+      requestAnimationFrame(() => initCharts(moduleId, body));
+    }
+
+    
+    
+    function renderImportModule() {
+      const importedInfo = !state.importedWorkbook
+        ? '当前为系统内置模拟数据，默认字段标准已切换为《长安人力资源系统数据标准》'
+        : state.importedWorkbook.type === 'schema-template'
+          ? `已识别为《长安人力资源系统数据标准》模板：${state.importedWorkbook.recognizedSheets.length} / ${standardSchema.sheetNames.length} 个标准工作表`
+          : `已导入 ${state.importedWorkbook.sheetNames.length} 个工作表 / ${state.importedWorkbook.rowCount} 行记录（按长安标准字段尝试识别）`;
+
+      const standardInfo = state.schemaProfile || standardSchema;
+      const topSummary = standardInfo.summary.slice(0, 8).map(item =>
+        `<tr><td>${item.group}</td><td>${item.code}</td><td>${item.name}</td><td>${item.itemCount ?? '-'}</td></tr>`
+      ).join('');
+
+      const fieldPreview = Object.entries(standardInfo.keyFields).slice(0, 6).map(([sheet, fields]) =>
+        `<div class="diag-item"><strong>${sheet}</strong><br>${fields.join(' / ')}</div>`
+      ).join('');
+
+      return `
+        <div class="content-grid">
+          <div class="panel">
+            <div class="footer-mini">
+              <h4><i class="fa-solid fa-cloud-arrow-up"></i> 数据接入中心 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="upload-zone">
+              <div>
+                <div style="font-size:34px;margin-bottom:8px;"><i class="fa-solid fa-file-arrow-up"></i></div>
+                <div>拖拽 Excel / CSV 到此处，或使用下方按钮导入</div>
+                <div class="hint" style="margin-top:6px;">字段与格式已切换为《长安人力资源系统数据标准》。系统优先识别：基础信息、部门信息、岗位信息、任职信息、绩效信息等多工作表。</div>
+                <div style="margin-top:12px;" class="switch-row">
+                  <button class="action-btn" id="mockImportBtn">模拟导入数据</button>
+                  <button class="action-btn" id="localImportBtn"><i class="fa-solid fa-folder-open"></i> 本地文件导入</button>
+                  <input type="file" id="localFileInput" accept=".xlsx,.xls,.csv" class="hidden" />
+                </div>
+              </div>
+            </div>
+            <div class="diag-item" style="margin-top:12px;"><strong>导入状态：</strong> ${importedInfo}</div>
+          </div>
+          <div class="content-grid three">
+            ${[
+              ['标准工作表', `${standardSchema.sheetNames.length}`, '已内置长安标准'],
+              ['指标集', `${standardSchema.summary.length}`, '按总表自动汇总'],
+              ['基础信息字段', `${(standardSchema.summary.find(i => i.code === 'B01') || {}).itemCount || 63}`, '员工主档标准'],
+              ['部门信息字段', `${(standardSchema.summary.find(i => i.code === 'A02') || {}).itemCount || 16}`, '组织结构标准'],
+              ['绩效信息字段', `${(standardSchema.summary.find(i => i.code === 'C08') || {}).itemCount || 6}`, '用于盘点与画像'],
+              ['字典引用', '94 张', '支持枚举口径统一']
+            ].map(i => `<div class="kpi"><div class="kpi-label">${i[0]}</div><div class="kpi-value">${i[1]}</div><div class="kpi-trend">${i[2]}</div></div>`).join('')}
+          </div>
+          <div class="content-grid two">
+            <div class="panel">
+              <h4><i class="fa-solid fa-book-atlas"></i> 长安标准关键工作表</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>信息分组</th><th>编码</th><th>指标集</th><th>字段数</th></tr></thead>
+                  <tbody>${topSummary}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-list-check"></i> 标准字段示例</h4>
+              <div class="diag-list">${fieldPreview}</div>
+            </div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel">
+              <h4><i class="fa-solid fa-circle-nodes"></i> 导入规则与识别逻辑</h4>
+              <div class="diag-list">
+                <div class="diag-item"><strong>模板识别：</strong> 若文件同时包含“总表、基础信息、部门信息、岗位信息、任职信息、绩效信息、字典”等工作表，系统自动识别为长安标准模板。</div>
+                <div class="diag-item"><strong>数据识别：</strong> 若导入的是实际业务数据，系统会按长安标准中的编码字段和中文字段双通道识别，如 code/name、dept、score、cheResult、trnsType 等。</div>
+                <div class="diag-item" data-ai-note="AI 建议：后续可在此标准基础上增加字段映射配置面板，对非标准命名文件进行自动纠偏。" data-local-note="本地规则建议：请优先按长安标准的工作表名称和字段编码准备数据，以获得更高识别准确率。">本地规则建议：请优先按长安标准的工作表名称和字段编码准备数据，以获得更高识别准确率。</div>
+              </div>
+            </div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-table"></i> 当前演示数据预览</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>工号</th><th>姓名</th><th>部门</th><th>岗位</th><th>学历</th><th>司龄</th><th>绩效</th><th>状态</th></tr></thead>
+                  <tbody>
+                    ${dataset.employees.map(e => `<tr><td>${e.id}</td><td>${e.name}</td><td>${e.dept}</td><td>${e.job}</td><td>${e.edu}</td><td>${e.tenure} 年</td><td>${e.perf.at(-1)}</td><td><span class="tag good">正常</span></td></tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+
+
+    
+    function renderStructureModule() {
+      const youngRatio = dataset.kpis.totalEmployees ? Math.round(((dataset.structure.age[0] + dataset.structure.age[1]) / dataset.kpis.totalEmployees) * 100) : 0;
+      const masterDoctorRatio = dataset.kpis.totalEmployees ? Math.round(((dataset.structure.education[2] + dataset.structure.education[3]) / dataset.kpis.totalEmployees) * 1000) / 10 : 0;
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-layer-group"></i> 员工结构总览 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="chip-row">
+              <span class="tag good">组织规模 ${dataset.kpis.totalEmployees} 人</span>
+              <span class="tag warn">离职率 ${dataset.kpis.turnover}%</span>
+              <span class="tag good">核心人才 ${dataset.kpis.coreTalent} 人</span>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">总人数</div><div class="kpi-value">${dataset.kpis.totalEmployees}</div><div class="kpi-trend">已按导入数据更新</div></div>
+            <div class="kpi"><div class="kpi-label">平均司龄</div><div class="kpi-value">${dataset.kpis.avgTenure} 年</div><div class="kpi-trend">动态计算</div></div>
+            <div class="kpi"><div class="kpi-label">30岁以下占比</div><div class="kpi-value">${youngRatio}%</div><div class="kpi-trend">${youngRatio < 35 ? '偏低预警' : '结构正常'}</div></div>
+            <div class="kpi"><div class="kpi-label">硕博占比</div><div class="kpi-value">${masterDoctorRatio}%</div><div class="kpi-trend">按学历字段识别</div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-chart-pie"></i> 年龄结构</h4><div class="chart" id="structureAge"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-graduation-cap"></i> 学历结构</h4><div class="chart" id="structureEdu"></div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-building-user"></i> 部门人数分布</h4><div class="chart lg" id="structureDept"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-ranking-star"></i> 职级分布</h4><div class="chart lg" id="structureGrade"></div></div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-stethoscope"></i> 结构诊断与优化建议</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 当前员工结构已基于导入文件重新计算。若年轻员工占比偏低，可判定组织年轻化不足；若硕博占比较低，可关注关键岗位人才供给。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议围绕高潜人才、关键部门人员密度和职级分布开展结构优化，并定期通过导入最新数据进行复盘。</div>
+              <div class="diag-item" data-ai-note="AI 摘要：系统已依据导入字段刷新组织结构画像，可继续结合绩效、异动与财务数据做更深层联动分析。" data-local-note="本地规则结论：当前结构分析已按导入数据更新，可继续打开人才盘点与人效分析查看联动结果。">本地规则结论：当前结构分析已按导入数据更新，可继续打开人才盘点与人效分析查看联动结果。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    function renderTalentModule() {
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-chess-board"></i> 人才盘点与梯队诊断 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="filter-row">
+              <button class="quick-btn active">整体盘点</button>
+              <button class="quick-btn">部门盘点</button>
+              <button class="quick-btn">关键岗位视图</button>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">高潜人才</div><div class="kpi-value">126</div><div class="kpi-trend">占比 4.4%</div></div>
+            <div class="kpi"><div class="kpi-label">关键岗位</div><div class="kpi-value">43</div><div class="kpi-trend">继任覆盖 68%</div></div>
+            <div class="kpi"><div class="kpi-label">风险人才</div><div class="kpi-value">57</div><div class="kpi-trend">需重点关注</div></div>
+            <div class="kpi"><div class="kpi-label">卓越区占比</div><div class="kpi-value">12.6%</div><div class="kpi-trend">略低于目标</div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-border-all"></i> 九宫格人才盘点</h4><div class="chart lg" id="talentMatrix"></div></div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-user-shield"></i> 关键岗位继任</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>岗位</th><th>现任</th><th>覆盖率</th><th>继任者</th><th>风险</th></tr></thead>
+                  <tbody>
+                    ${dataset.succession.map(s => `<tr><td>${s.role}</td><td>${s.owner}</td><td>${Math.round(s.coverage*100)}%</td><td>${s.candidate}</td><td><span class="tag ${s.risk==='高'?'bad':s.risk==='中'?'warn':'good'}">${s.risk}</span></td></tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-clipboard-question"></i> 盘点结论与建议</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 卓效区人才占比低于目标，供应链关键岗位存在继任断层，销售与研发的高潜人才集中度较高。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议将供应链、制造系统纳入重点后备建设范围，建立跨部门轮岗和后备干部校准机制。</div>
+              <div class="diag-item" data-ai-note="AI 盘点摘要：当前高潜人才主要集中在研发与职能条线，供应链岗位的继任风险最高，建议优先配置高潜轮岗与重点导师辅导资源。" data-local-note="本地规则结论：关键岗位继任覆盖不足，建议至少为每个关键岗位配置 1 名待发展后备。">本地规则结论：关键岗位继任覆盖不足，建议至少为每个关键岗位配置 1 名待发展后备。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProfileModule() {
+      const e = dataset.employees[0];
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-address-card"></i> 人才画像 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="switch-row">
+              ${dataset.employees.map((emp, i) => `<button class="quick-btn ${i===0?'active':''}" data-profile-id="${emp.id}">${emp.name}</button>`).join('')}
+            </div>
+          </div>
+          <div class="split">
+            <div class="panel profile-card" id="profileCard"></div>
+            <div class="content-grid">
+              <div class="content-grid two">
+                <div class="panel"><h4><i class="fa-solid fa-arrow-trend-up"></i> 绩效趋势</h4><div class="chart sm" id="profilePerf"></div></div>
+                <div class="panel"><h4><i class="fa-solid fa-bullseye"></i> 能力雷达</h4><div class="chart sm" id="profileRadar"></div></div>
+              </div>
+              <div class="panel">
+                <h4><i class="fa-solid fa-road"></i> 职业发展轨迹</h4>
+                <div class="timeline" id="profileTimeline"></div>
+              </div>
+              <div class="panel">
+                <h4><i class="fa-solid fa-lightbulb"></i> 发展建议与风险提示</h4>
+                <div class="diag-list" id="profileAdvice"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    
+    function renderEfficiencyModule() {
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-chart-column"></i> 人效分析 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="chip-row">
+              <span class="tag good">人均收入 ${dataset.kpis.revenuePerCapita} 万</span>
+              <span class="tag good">人均利润 ${dataset.kpis.profitPerCapita} 万</span>
+              <span class="tag warn">人均成本 ${dataset.kpis.costPerCapita} 万</span>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">人均收入</div><div class="kpi-value">${dataset.kpis.revenuePerCapita}</div><div class="kpi-trend">按导入财务/人数字段动态计算</div></div>
+            <div class="kpi"><div class="kpi-label">人均利润</div><div class="kpi-value">${dataset.kpis.profitPerCapita}</div><div class="kpi-trend">最新年度口径</div></div>
+            <div class="kpi"><div class="kpi-label">人均成本</div><div class="kpi-value">${dataset.kpis.costPerCapita}</div><div class="kpi-trend">最新年度口径</div></div>
+            <div class="kpi"><div class="kpi-label">人事费用率</div><div class="kpi-value">${((dataset.kpis.costPerCapita / Math.max(dataset.kpis.revenuePerCapita, 1)) * 100).toFixed(1)}%</div><div class="kpi-trend">估算值</div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-chart-line"></i> 历年人效趋势</h4><div class="chart lg" id="effTrend"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-bars-progress"></i> 部门人效对比</h4><div class="chart lg" id="effDept"></div></div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-briefcase-medical"></i> 人效诊断与建议</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 系统已优先使用导入文件中的人数与财务字段更新人效指标；若缺少财务字段，则保留示例口径进行展示。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议在本地文件中提供“年份、营业收入、营业成本、净利润、员工人数”等字段，以获得更准确的人效趋势与对标结果。</div>
+              <div class="diag-item" data-ai-note="AI 结论：可将导入的人效结果与对标上市公司样本做差异分析，再结合组织和人才盘点结果确定优化优先级。" data-local-note="本地规则结论：当前人效结果已随导入文件更新，可继续进入“人效对标”模块联动分析。">本地规则结论：当前人效结果已随导入文件更新，可继续进入“人效对标”模块联动分析。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    function renderBenchmarkModule() {
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-scale-balanced"></i> 人效对标 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="switch-row">
+              <button class="action-btn" id="runBenchmarkBtn"><i class="fa-solid fa-bolt"></i> 开始分析</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="content-grid two">
+              <div>
+                <h4><i class="fa-solid fa-building-circle-check"></i> 对标企业</h4>
+                <div class="chip-row" id="peerChips">
+                  ${Object.keys(dataset.benchmark.peers).map(name => `<button class="company-chip active" data-peer="${name}">${name}</button>`).join('')}
+                </div>
+              </div>
+              <div>
+                <h4><i class="fa-solid fa-calendar-days"></i> 对标年份 / 指标</h4>
+                <div class="chip-row" id="yearChips">
+                  ${dataset.benchmark.years.map((y,i) => `<button class="company-chip ${i===3?'active':''}" data-year="${y}">${y}</button>`).join('')}
+                </div>
+                <div class="chip-row" style="margin-top:10px;" id="indicatorChips">
+                  <button class="indicator-chip active" data-indicator="revenuePerCapita">人均收入</button>
+                  <button class="indicator-chip" data-indicator="costPerCapita">人均成本</button>
+                  <button class="indicator-chip" data-indicator="profitPerCapita">人均利润</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-chart-simple"></i> 当前年度对比</h4><div class="chart lg" id="benchmarkCurrent"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-wave-square"></i> 历年趋势对比</h4><div class="chart lg" id="benchmarkTrend"></div></div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-file-signature"></i> 对标结论</h4>
+            <div class="typewriter" id="benchmarkSummary">${state.mode==='ai' ? '正在等待 AI 分析…' : '本地规则模式：本公司人均收入低于长久物流，高于原尚股份；人均成本略高于行业样本均值，建议结合组织效率与岗位结构做进一步分析。'}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderOrgModule() {
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-sitemap"></i> 组织诊断 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="chip-row">
+              <span class="tag good">编制使用率 ${dataset.orgHealth.staffing}%</span>
+              <span class="tag warn">组织层级偏多</span>
+              <span class="tag warn">部分部门缺编 / 超编并存</span>
+            </div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-gauge-high"></i> 编制与管理幅度</h4><div class="chart lg" id="orgSpan"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-chart-bar"></i> 层级与超缺编</h4><div class="chart lg" id="orgLayer"></div></div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-stethoscope"></i> 组织问题诊断</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 销售与研发管理层级偏多，职能平台管理幅度偏窄，组织横向协同成本偏高。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议开展组织扁平化试点，重点提升中层管理者的管理跨度，并结合编制盘点优化冗余岗位。</div>
+              <div class="diag-item" data-ai-note="AI 建议：先选择‘超编高成本’和‘缺编高风险’两个部门群组做组织设计试点，并将人效、人岗匹配和岗位价值评估联动分析。" data-local-note="本地规则结论：应优先治理管理跨度低、层级多且人效偏低的部门。">本地规则结论：应优先治理管理跨度低、层级多且人效偏低的部门。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAiModule() {
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-sparkles"></i> AI 洞察中心 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="quick-row">
+              <button class="quick-btn" data-question="当前人力资源最大的风险是什么？">当前人力资源最大的风险是什么？</button>
+              <button class="quick-btn" data-question="哪些部门最需要优化？">哪些部门最需要优化？</button>
+              <button class="quick-btn" data-question="谁适合作为后备干部？">谁适合作为后备干部？</button>
+              <button class="quick-btn" data-question="我公司人效与行业相比怎么样？">我公司人效与行业相比怎么样？</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="field">
+              <label>请输入你的问题</label>
+              <textarea id="aiQuestionInput" placeholder="例如：当前人效最大的拖累因素是什么？"></textarea>
+            </div>
+            <div class="footer-mini">
+              <div class="note">本地模式下将基于规则引擎模拟回答；AI 模式下将使用配置的模型接口结构进行演示。</div>
+              <button class="action-btn" id="askAiBtn"><i class="fa-solid fa-paper-plane"></i> 开始洞察</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-comments"></i> 对话与结论</h4>
+            <div class="chat-box" id="aiChatBox"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSettingsModule() {
+      return `
+        <div class="content-grid">
+          <div class="panel">
+            <h4><i class="fa-solid fa-gears"></i> 系统设置总览</h4>
+            <div class="kpi-row">
+              <div class="kpi"><div class="kpi-label">当前模式</div><div class="kpi-value">${state.mode === 'ai' ? 'AI' : 'LOCAL'}</div><div class="kpi-trend">可随时切换</div></div>
+              <div class="kpi"><div class="kpi-label">已开模块</div><div class="kpi-value">${Object.keys(state.windows).length}</div><div class="kpi-trend">支持多窗口</div></div>
+              <div class="kpi"><div class="kpi-label">主题</div><div class="kpi-value">NEON</div><div class="kpi-trend">科技驾驶舱</div></div>
+              <div class="kpi"><div class="kpi-label">演示数据</div><div class="kpi-value">READY</div><div class="kpi-trend">已加载</div></div>
+            </div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel">
+              <h4><i class="fa-solid fa-wrench"></i> 快捷操作</h4>
+              <div class="switch-row">
+                <button class="action-btn" id="resetLayoutBtn">重置布局</button>
+                <button class="action-btn" id="openAllBtn">打开常用模块</button>
+                <button class="action-btn" id="showDrawerBtn">打开 AI 配置</button>
+              </div>
+            </div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-circle-info"></i> 使用说明</h4>
+              <div class="diag-item">主菜单支持打开多个浮动模块，窗口可拖动、缩放、最小化、全屏。AI 模式当前为接口结构演示，可替换为真实服务。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function bindWindowInnerEvents(moduleId, body) {
+      if (moduleId === 'import') {
+        body.querySelector('#mockImportBtn')?.addEventListener('click', () => {
+          state.importedWorkbook = null;
+          toast('模拟导入成功', '已恢复系统内置模拟数据样本。');
+          if (typeof rerenderOpenWindows === 'function') rerenderOpenWindows();
+        });
+        body.querySelector('#localImportBtn')?.addEventListener('click', () => body.querySelector('#localFileInput')?.click());
+        body.querySelector('#localFileInput')?.addEventListener('change', (e) => handleWorkbookImport(e.target.files?.[0]));
+      }
+      if (moduleId === 'profile') {
+        body.querySelectorAll('[data-profile-id]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-profile-id]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderProfileDetail(btn.dataset.profileId, body);
+        }));
+        renderProfileDetail(dataset.employees[0].id, body);
+      }
+      if (moduleId === 'benchmark') {
+        body.querySelectorAll('[data-peer]').forEach(btn => btn.addEventListener('click', () => btn.classList.toggle('active')));
+        body.querySelectorAll('[data-year]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-year]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateBenchmarkCharts(body);
+        }));
+        body.querySelectorAll('[data-indicator]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-indicator]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateBenchmarkCharts(body);
+        }));
+        body.querySelector('#runBenchmarkBtn')?.addEventListener('click', () => runBenchmarkAnalysis(body));
+      }
+      if (moduleId === 'ai') {
+        const chat = body.querySelector('#aiChatBox');
+        chat.innerHTML = `<div class="bubble ai">你好，我是 HR 洞察助手。你可以直接提问，或点击上方快捷问题。</div>`;
+        body.querySelectorAll('[data-question]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelector('#aiQuestionInput').value = btn.dataset.question;
+          askAiQuestion(body);
+        }));
+        body.querySelector('#askAiBtn')?.addEventListener('click', () => askAiQuestion(body));
+      }
+      if (moduleId === 'settings') {
+        body.querySelector('#resetLayoutBtn')?.addEventListener('click', resetLayout);
+        body.querySelector('#openAllBtn')?.addEventListener('click', () => ['import','structure','talent','profile','benchmark'].forEach(openWindow));
+        body.querySelector('#showDrawerBtn')?.addEventListener('click', () => document.getElementById('settingsDrawer').classList.add('open'));
+      }
+    }
+
+    function renderProfileDetail(empId, body) {
+      const emp = dataset.employees.find(e => e.id === empId) || dataset.employees[0];
+      body.querySelector('#profileCard').innerHTML = `
+        <div class="profile-head">
+          <div class="profile-avatar"><i class="fa-solid fa-user"></i></div>
+          <div>
+            <div style="font-size:18px;font-weight:700;">${emp.name}</div>
+            <div class="subtle">${emp.id} · ${emp.dept}</div>
+            <div class="subtle">${emp.job} · ${emp.grade}</div>
+          </div>
+        </div>
+        <div class="diag-item">年龄 ${emp.age} 岁 ｜ 学历 ${emp.edu} ｜ 司龄 ${emp.tenure} 年</div>
+        <div class="chip-row">${emp.tags.map(t => `<span class="tag good">${t}</span>`).join('')}</div>
+        <div class="diag-item"><strong>风险等级：</strong> ${emp.risk} ｜ <strong>合同到期：</strong> ${emp.contract}</div>
+      `;
+      body.querySelector('#profileTimeline').innerHTML = `
+        <div class="timeline-item"><strong>2021.03</strong> 加入公司，任职 ${emp.dept} 岗位。</div>
+        <div class="timeline-item"><strong>2022.08</strong> 负责重点项目 / 关键区域业务。</div>
+        <div class="timeline-item"><strong>2023.12</strong> 获得年度优秀员工 / 核心项目表彰。</div>
+        <div class="timeline-item"><strong>2024.10</strong> 纳入高潜 / 后备人才观察池。</div>
+      `;
+      body.querySelector('#profileAdvice').innerHTML = `
+        <div class="diag-item"><strong>诊断：</strong> 近四期绩效保持高位，能力标签集中在专业深度、项目交付与跨团队协同。</div>
+        <div class="diag-item"><strong>建议：</strong> 可沿专业专家或项目管理双通道发展，建议补充组织影响力与团队带教能力培养。</div>
+        <div class="diag-item" data-ai-note="AI 画像摘要：该员工具备较强的成长性和持续交付能力，适合作为后备干部或核心岗位继任者进行重点培养。" data-local-note="本地规则结论：该员工具备高潜特征，建议纳入重点培养名单。">本地规则结论：该员工具备高潜特征，建议纳入重点培养名单。</div>
+      `;
+      requestAnimationFrame(() => initCharts('profile', body, emp));
+    }
+
+    function initCharts(moduleId, body, emp) {
+      if (moduleId === 'structure') {
+        drawPie('structureAge', ['<25','25-30','31-35','36-40','40+'], dataset.structure.age, '年龄结构');
+        drawPie('structureEdu', ['大专及以下','本科','硕士','博士'], dataset.structure.education, '学历结构');
+        drawBar('structureDept', dataset.structure.depts.map(d=>d.name), dataset.structure.depts.map(d=>d.value), '人数');
+        drawBar('structureGrade', dataset.structure.gradeLabels || ['E','P4','P5-P6','P7-P8','M'], dataset.structure.grades, '人数');
+      }
+      if (moduleId === 'talent') {
+        drawTalentMatrix('talentMatrix');
+      }
+      if (moduleId === 'efficiency') {
+        drawEfficiencyTrend('effTrend');
+        drawDeptEfficiency('effDept');
+      }
+      if (moduleId === 'benchmark') {
+        updateBenchmarkCharts(body);
+      }
+      if (moduleId === 'org') {
+        drawOrgSpan('orgSpan');
+        drawOrgLayer('orgLayer');
+      }
+      if (moduleId === 'profile' && emp) {
+        drawProfilePerf('profilePerf', emp);
+        drawProfileRadar('profileRadar', emp);
+      }
+    }
+
+    function chartBase(domId) {
+      const dom = document.getElementById(domId);
+      if (!dom) return null;
+      let chart = echarts.getInstanceByDom(dom);
+      if (!chart) chart = echarts.init(dom);
+      return chart;
+    }
+
+    function commonOption() {
+      return {
+        backgroundColor: 'transparent',
+        textStyle: { color: '#d8f2ff' },
+        grid: { left: 36, right: 20, top: 28, bottom: 32 },
+        tooltip: { trigger: 'axis', backgroundColor: 'rgba(8,18,30,.92)', borderColor: 'rgba(66,214,255,.25)', textStyle: { color: '#fff' } }
+      };
+    }
+
+    function drawPie(id, labels, values, name) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        tooltip: { trigger: 'item' },
+        legend: { bottom: 0, textStyle: { color: '#bde7ff' } },
+        series: [{
+          type: 'pie', radius: ['42%','72%'], center: ['50%','44%'],
+          label: { color: '#e6f7ff' },
+          itemStyle: { borderColor: '#08121e', borderWidth: 2 },
+          data: labels.map((l,i) => ({ name: l, value: values[i] }))
+        }]
+      });
+    }
+
+    function drawBar(id, x, y, name) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        xAxis: { type: 'category', data: x, axisLabel: { color: '#bde7ff' }, axisLine: { lineStyle: { color: 'rgba(99,211,255,.2)' } } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [{ type: 'bar', data: y, name, barWidth: 24, itemStyle: { borderRadius: [8,8,0,0] } }]
+      });
+    }
+
+    function drawTalentMatrix(id) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        tooltip: { trigger: 'item', formatter: p => `${p.value[2]}<br/>绩效：${p.value[0]}｜潜力：${p.value[1]}<br/>${p.value[3]}` },
+        xAxis: { min: 50, max: 100, splitNumber: 3, name: '绩效', nameTextStyle: { color: '#bde7ff' }, axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        yAxis: { min: 50, max: 100, splitNumber: 3, name: '潜力', nameTextStyle: { color: '#bde7ff' }, axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [{ type: 'scatter', symbolSize: v => Math.max(16, (v[0]+v[1])/14), data: dataset.talentMatrix.map(d => [d[1], d[2], d[0], d[3]]) }]
+      });
+    }
+
+    function drawProfilePerf(id, emp) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        xAxis: { type: 'category', data: ['Q1','Q2','Q3','Q4'], axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', min: 60, max: 100, axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [{ type: 'line', smooth: true, data: emp.perf, areaStyle: {}, symbolSize: 8 }]
+      });
+    }
+
+    function drawProfileRadar(id, emp) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        tooltip: {},
+        radar: { indicator: [
+          { name: '专业深度', max: 100 }, { name: '协同影响', max: 100 }, { name: '项目交付', max: 100 }, { name: '学习敏捷', max: 100 }, { name: '领导潜力', max: 100 }
+        ], axisName: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.14)' } }, splitArea: { areaStyle: { color: ['rgba(11,27,47,.2)','rgba(11,27,47,.08)'] } } },
+        series: [{ type: 'radar', data: [{ value: [88, 80, 91, emp.potential, 76], name: emp.name }]}]
+      });
+    }
+
+    function drawEfficiencyTrend(id) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        legend: { top: 0, textStyle: { color: '#bde7ff' } },
+        xAxis: { type: 'category', data: dataset.benchmark.years, axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [
+          { type: 'line', smooth: true, name: '人均收入', data: dataset.benchmark.self.revenuePerCapita },
+          { type: 'line', smooth: true, name: '人均成本', data: dataset.benchmark.self.costPerCapita },
+          { type: 'line', smooth: true, name: '人均利润', data: dataset.benchmark.self.profitPerCapita }
+        ]
+      });
+    }
+
+    function drawDeptEfficiency(id) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        legend: { top: 0, textStyle: { color: '#bde7ff' } },
+        xAxis: { type: 'category', data: dataset.deptEfficiency.names, axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [
+          { type: 'bar', name: '人均收入', data: dataset.deptEfficiency.revenue },
+          { type: 'bar', name: '人均成本', data: dataset.deptEfficiency.cost }
+        ]
+      });
+    }
+
+    function drawOrgSpan(id) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        legend: { top: 0, textStyle: { color: '#bde7ff' } },
+        xAxis: { type: 'category', data: dataset.orgHealth.names, axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [
+          { type: 'bar', name: '管理幅度', data: dataset.orgHealth.managerSpan },
+          { type: 'line', name: '编制使用率', data: [94, 90, 88, 96, 89] }
+        ]
+      });
+    }
+
+    function drawOrgLayer(id) {
+      const chart = chartBase(id); if (!chart) return;
+      chart.setOption({
+        ...commonOption(),
+        legend: { top: 0, textStyle: { color: '#bde7ff' } },
+        xAxis: { type: 'category', data: dataset.orgHealth.names, axisLabel: { color: '#bde7ff' } },
+        yAxis: [
+          { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+          { type: 'value', axisLabel: { color: '#bde7ff' } }
+        ],
+        series: [
+          { type: 'bar', name: '超缺编', data: dataset.orgHealth.overUnder },
+          { type: 'line', yAxisIndex: 1, name: '组织层级', data: dataset.orgHealth.layers }
+        ]
+      });
+    }
+
+    function getBenchmarkSelections(body) {
+      const peers = [...body.querySelectorAll('[data-peer].active')].map(el => el.dataset.peer);
+      const year = body.querySelector('[data-year].active')?.dataset.year || dataset.benchmark.years.at(-1);
+      const indicator = body.querySelector('[data-indicator].active')?.dataset.indicator || 'revenuePerCapita';
+      return { peers, year, indicator };
+    }
+
+    function updateBenchmarkCharts(body) {
+      const { peers, year, indicator } = getBenchmarkSelections(body);
+      const yearIndex = dataset.benchmark.years.indexOf(year);
+      const currentChart = chartBase('benchmarkCurrent');
+      currentChart && currentChart.setOption({
+        ...commonOption(),
+        xAxis: { type: 'category', data: ['本公司', ...peers], axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [{ type: 'bar', data: [dataset.benchmark.self[indicator][yearIndex], ...peers.map(p => dataset.benchmark.peers[p][indicator][yearIndex])], barWidth: 30, itemStyle: { borderRadius: [8,8,0,0] } }]
+      });
+      const trendChart = chartBase('benchmarkTrend');
+      trendChart && trendChart.setOption({
+        ...commonOption(),
+        legend: { top: 0, textStyle: { color: '#bde7ff' } },
+        xAxis: { type: 'category', data: dataset.benchmark.years, axisLabel: { color: '#bde7ff' } },
+        yAxis: { type: 'value', axisLabel: { color: '#bde7ff' }, splitLine: { lineStyle: { color: 'rgba(99,211,255,.08)' } } },
+        series: [{ type: 'line', smooth: true, name: '本公司', data: dataset.benchmark.self[indicator] }, ...peers.map(p => ({ type: 'line', smooth: true, name: p, data: dataset.benchmark.peers[p][indicator] }))]
+      });
+    }
+
+    function indicatorLabel(key) {
+      return ({ revenuePerCapita: '人均收入', costPerCapita: '人均成本', profitPerCapita: '人均利润' })[key] || key;
+    }
+
+    function runBenchmarkAnalysis(body) {
+      const { peers, year, indicator } = getBenchmarkSelections(body);
+      const yearIndex = dataset.benchmark.years.indexOf(year);
+      const selfValue = dataset.benchmark.self[indicator][yearIndex];
+      const peerValues = peers.map(p => dataset.benchmark.peers[p][indicator][yearIndex]);
+      const avg = peerValues.reduce((a,b)=>a+b,0) / (peerValues.length || 1);
+      const summary = body.querySelector('#benchmarkSummary');
+      if (state.mode === 'ai') {
+        const prompt = `请分析 ${year} 年本公司与 ${peers.join('、')} 在 ${indicatorLabel(indicator)} 上的差异，并输出结构化结论。`;
+        typeWriter(summary, `AI 检索提示词：${prompt}\n\nAI 结论：${year} 年本公司${indicatorLabel(indicator)}为 ${selfValue}，对标样本均值约为 ${avg.toFixed(1)}。差距主要来自组织效率与岗位结构配置，建议优先对高成本、低产出部门做深入分析，并结合关键岗位与流程优化推进提升。`);
+      } else {
+        summary.textContent = `${year} 年本公司${indicatorLabel(indicator)}为 ${selfValue}，对标企业平均为 ${avg.toFixed(1)}。${selfValue >= avg ? '整体优于样本均值，建议持续巩固优势部门经验。' : '低于样本均值，建议结合组织效率、编制结构与流程自动化做进一步分析。'}`;
+      }
+      updateBenchmarkCharts(body);
+    }
+
+    function askAiQuestion(body) {
+      const input = body.querySelector('#aiQuestionInput');
+      const text = input.value.trim();
+      if (!text) {
+        toast('请输入问题', '你可以直接描述你想分析的人力资源问题。');
+        return;
+      }
+      const chat = body.querySelector('#aiChatBox');
+      const userBubble = document.createElement('div');
+      userBubble.className = 'bubble user';
+      userBubble.textContent = text;
+      chat.appendChild(userBubble);
+      const aiBubble = document.createElement('div');
+      aiBubble.className = 'bubble ai';
+      chat.appendChild(aiBubble);
+      chat.scrollTop = chat.scrollHeight;
+      const answer = state.mode === 'ai'
+        ? `AI 综合分析：\n• 当前最大风险集中在关键岗位继任覆盖不足与组织年轻化不足。\n• 建议优先关注供应链与制造系统的人效和人才梯队问题。\n• 可结合人效对标、组织诊断与高潜人才盘点形成联动优化闭环。`
+        : `本地规则回答：\n• 当前最大风险是关键岗位继任覆盖不足。\n• 组织年轻化不足，35 岁以下员工占比偏低。\n• 建议优先治理管理幅度低且人效偏低的部门。`;
+      typeWriter(aiBubble, answer);
+      input.value = '';
+    }
+
+    function typeWriter(el, text) {
+      el.textContent = '';
+      let i = 0;
+      const timer = setInterval(() => {
+        el.textContent += text[i] || '';
+        i++;
+        if (i >= text.length) clearInterval(timer);
+        el.parentElement && (el.parentElement.scrollTop = el.parentElement.scrollHeight);
+      }, 12);
+    }
+
+    function resetLayout() {
+      Object.keys(state.windows).forEach(closeWindow);
+      setTimeout(() => {
+        openWindow('structure');
+        openWindow('efficiency');
+        toast('布局已重置', '已恢复默认演示布局。');
+      }, 220);
+    }
+
+
+    const originalDataset = JSON.parse(JSON.stringify(dataset));
+
+    function resetToMockData() {
+      Object.keys(dataset).forEach(k => delete dataset[k]);
+      Object.assign(dataset, JSON.parse(JSON.stringify(originalDataset)));
+      state.importedWorkbook = null;
+      state.importedData = { employeeBase: null, payroll: null, finance: null };
+      state.schemaProfile = standardSchema;
+      computeDeptEfficiencyFromStructure();
+    }
+
+    function getImportStatusText() {
+      const parts = [];
+      parts.push(`标准：已内置《中国长安集团人力资源管理系统集成数据标准》`);
+      parts.push(`员工基本信息表：${state.importedData.employeeBase ? '已导入' : '未导入'}`);
+      parts.push(`薪酬绩效表：${state.importedData.payroll ? '已导入' : '未导入'}`);
+      parts.push(`财务数据表：${state.importedData.finance ? '已导入' : '未导入'}`);
+      return parts.join(' ｜ ');
+    }
+
+    function workbookToRows(workbook) {
+      const rows = [];
+      workbook.SheetNames.forEach(sheetName => {
+        const ws = workbook.Sheets[sheetName];
+        XLSX.utils.sheet_to_json(ws, { defval: '' }).forEach(r => rows.push({ __sheet: sheetName, ...r }));
+      });
+      return rows;
+    }
+
+    function readWorkbookFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const data = e.target.result;
+            const workbook = file.name.toLowerCase().endsWith('.csv')
+              ? XLSX.read(data, { type: 'binary' })
+              : XLSX.read(data, { type: 'array' });
+            resolve(workbook);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        if (file.name.toLowerCase().endsWith('.csv')) reader.readAsBinaryString(file);
+        else reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function normalizeId(val) {
+      return String(val || '').trim();
+    }
+
+    function getEmployeeIdFromRow(row) {
+      return normalizeId(getRowValue(row, ['员工编码', '工号', '员工工号', '人员编码', '人员编号', 'employeeid', 'empid', 'emp code', 'code']));
+    }
+
+    function deriveEmployeeBaseWorkbook(workbook) {
+      const allRows = workbookToRows(workbook);
+      const baseRows = workbook.SheetNames.includes('基础信息')
+        ? XLSX.utils.sheet_to_json(workbook.Sheets['基础信息'], { defval: '' }).map(r => ({ __sheet: '基础信息', ...r }))
+        : allRows.filter(r => getEmployeeIdFromRow(r) || getRowValue(r, ['姓名', '员工姓名']));
+      const deptRows = workbook.SheetNames.includes('部门信息')
+        ? XLSX.utils.sheet_to_json(workbook.Sheets['部门信息'], { defval: '' }).map(r => ({ __sheet: '部门信息', ...r }))
+        : [];
+      const postRows = workbook.SheetNames.includes('岗位信息')
+        ? XLSX.utils.sheet_to_json(workbook.Sheets['岗位信息'], { defval: '' }).map(r => ({ __sheet: '岗位信息', ...r }))
+        : [];
+      const perfRows = workbook.SheetNames.includes('绩效信息')
+        ? XLSX.utils.sheet_to_json(workbook.Sheets['绩效信息'], { defval: '' }).map(r => ({ __sheet: '绩效信息', ...r }))
+        : [];
+      const perfById = {};
+      perfRows.forEach(r => {
+        const id = getEmployeeIdFromRow(r);
+        if (!id) return;
+        const score = normalizeNumber(getRowValue(r, ['绩效得分', 'score', '考核分数', '绩效分数'])) ?? normalizeNumber(getRowValue(r, ['考核结果', '绩效结果', 'cheResult'])) ?? 80;
+        (perfById[id] ||= []).push(score);
+      });
+
+      const employees = uniqueBy(baseRows.map((row, idx) => {
+        const id = getEmployeeIdFromRow(row) || `EMP${idx+1}`;
+        const name = String(getRowValue(row, ['姓名', '员工姓名', 'name']) || `员工${idx+1}`);
+        const dept = String(getRowValue(row, ['部门名称', '所属部门', '部门', 'deptName', 'dept']) || '未分配部门');
+        const job = String(getRowValue(row, ['岗位名称', '岗位', 'postName', 'post']) || '岗位待识别');
+        const grade = String(getRowValue(row, ['管理岗级别', '职级', 'adminLevel', 'grade']) || 'P5');
+        const age = normalizeNumber(getRowValue(row, ['年龄', 'age'])) ?? (25 + idx % 15);
+        const edu = String(getRowValue(row, ['学历', '最高学历', 'highestEdu']) || '本科');
+        const tenure = normalizeNumber(getRowValue(row, ['司龄', '工龄', 'tenure'])) ?? Number((1 + (idx % 10) * 0.7).toFixed(1));
+        const seq = String(getRowValue(row, ['人员类别', '人员ABC分类', '岗位序列', 'empCategory']) || '');
+        const perf = perfById[id]?.slice(-4);
+        const perfSeries = perf && perf.length ? [...Array(Math.max(0,4-perf.length)).fill(perf[0]), ...perf].slice(-4) : [76 + idx%6, 78 + idx%6, 80 + idx%6, 82 + idx%6];
+        const potential = normalizeNumber(getRowValue(row, ['潜力', '人才级别', '人才称号', 'potential'])) ?? Math.min(95, perfSeries.at(-1) + 2);
+        const tags = [];
+        if (/研发|技术/.test(seq + dept + job)) tags.push('技术');
+        if (potential >= 85) tags.push('高潜');
+        if (perfSeries.at(-1) >= 90) tags.push('高绩效');
+        if (!tags.length) tags.push('待观察');
+        return {
+          id, name, dept, job, grade, age, edu, tenure,
+          perf: perfSeries,
+          potential,
+          tags,
+          risk: potential >= 85 ? '低' : potential >= 75 ? '中' : '高',
+          contract: String(getRowValue(row, ['劳动合同结束时间', '合同结束时间', 'endDate', '合同到期']) || '2026-12-31')
+        };
+      }), e => e.id);
+
+      if (employees.length) dataset.employees = employees;
+      dataset.kpis.totalEmployees = employees.length || dataset.kpis.totalEmployees;
+      dataset.kpis.avgTenure = Number(safeAvg(employees.map(e => e.tenure)).toFixed(1));
+      dataset.kpis.coreTalent = employees.filter(e => e.potential >= 85).length;
+
+      const male = employees.filter(e => /男/.test(String(getRowValue(baseRows.find(r => getEmployeeIdFromRow(r) === e.id) || {}, ['性别']) || ''))).length || Math.round(employees.length * 0.54);
+      dataset.structure.gender = [male, Math.max(0, employees.length - male)];
+
+      const ageBuckets = [0,0,0,0,0];
+      const eduMap = {'大专及以下':0,'本科':0,'硕士':0,'博士':0};
+      const tenureBuckets = [0,0,0,0,0];
+      const deptMap = {};
+      const gradeMap = {};
+      employees.forEach(e => {
+        if (e.age < 25) ageBuckets[0]++; else if (e.age <= 30) ageBuckets[1]++; else if (e.age <= 35) ageBuckets[2]++; else if (e.age <= 40) ageBuckets[3]++; else ageBuckets[4]++;
+        if (/博士/.test(e.edu)) eduMap['博士']++; else if (/硕士|研究生/.test(e.edu)) eduMap['硕士']++; else if (/本科/.test(e.edu)) eduMap['本科']++; else eduMap['大专及以下']++;
+        if (e.tenure < 1) tenureBuckets[0]++; else if (e.tenure < 3) tenureBuckets[1]++; else if (e.tenure < 5) tenureBuckets[2]++; else if (e.tenure < 10) tenureBuckets[3]++; else tenureBuckets[4]++;
+        deptMap[e.dept] = (deptMap[e.dept] || 0) + 1;
+        gradeMap[e.grade] = (gradeMap[e.grade] || 0) + 1;
+      });
+      dataset.structure.age = ageBuckets;
+      dataset.structure.education = [eduMap['大专及以下'], eduMap['本科'], eduMap['硕士'], eduMap['博士']];
+      dataset.structure.tenure = tenureBuckets;
+      dataset.structure.depts = Object.entries(deptMap).sort((a,b)=>b[1]-a[1]).map(([name,value]) => ({name,value}));
+      const gradeEntries = Object.entries(gradeMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      dataset.structure.gradeLabels = gradeEntries.map(([k]) => k);
+      dataset.structure.grades = gradeEntries.map(([,v]) => v);
+
+      dataset.talentMatrix = employees.slice(0, Math.min(80, employees.length)).map(e => [e.name, e.perf.at(-1), e.potential, e.dept]);
+      dataset.succession = dataset.structure.depts.slice(0,3).map((d, idx) => {
+        const deptEmployees = employees.filter(e => e.dept === d.name).sort((a,b)=> (b.potential + b.perf.at(-1)) - (a.potential + a.perf.at(-1)));
+        const owner = deptEmployees[0]?.name || '待定';
+        const candidate = deptEmployees.slice(1,3).map(e => e.name).join(' / ') || '暂无';
+        const coverage = Math.min(1, deptEmployees.length >= 3 ? 1 : deptEmployees.length >= 2 ? 0.5 : 0);
+        return { role: `${d.name}负责人`, owner, coverage, candidate, risk: coverage >= 1 ? '低' : coverage > 0 ? '中' : '高' };
+      });
+
+      const deptNames = dataset.structure.depts.slice(0,5).map(d=>d.name);
+      dataset.orgHealth.names = deptNames;
+      dataset.orgHealth.staffing = 90 + Math.min(8, Math.round(employees.length / 500));
+      dataset.orgHealth.managerSpan = deptNames.map((n, i) => {
+        const head = dataset.structure.depts.find(d => d.name===n)?.value || 1;
+        return Math.max(3, Math.min(10, Math.round(head / (8 + i*2))));
+      });
+      dataset.orgHealth.layers = deptNames.map((_, i) => 3 + (i % 3));
+      dataset.orgHealth.overUnder = deptNames.map((n, i) => {
+        const head = dataset.structure.depts.find(d => d.name===n)?.value || 0;
+        return Math.round(head * (i % 2 === 0 ? 0.03 : -0.02));
+      });
+
+      state.importedData.employeeBase = {
+        fileType: 'employeeBase',
+        sheetNames: workbook.SheetNames.slice(),
+        employeeCount: employees.length,
+        deptCount: dataset.structure.depts.length,
+        matchedBy: '工号',
+        sourceSheets: {
+          base: baseRows.length,
+          dept: deptRows.length,
+          post: postRows.length,
+          perf: perfRows.length
+        }
+      };
+      state.importedWorkbook = { type: 'employee-base', sheetNames: workbook.SheetNames.slice(), rowCount: allRows.length };
+      computeDeptEfficiencyFromStructure();
+      if (state.importedData.payroll) applyPayrollData(state.importedData.payroll.rows);
+      if (state.importedData.finance) applyFinanceData(state.importedData.finance.rows);
+    }
+
+    function applyPayrollData(rows) {
+      const map = {};
+      rows.forEach(r => {
+        const id = getEmployeeIdFromRow(r);
+        if (!id) return;
+        const perf = normalizeNumber(getRowValue(r, ['绩效得分', '绩效分数', 'score', '绩效', '考核分数']));
+        const salary = normalizeNumber(getRowValue(r, ['固定工资', '工资', '月薪', 'salary']));
+        const bonus = normalizeNumber(getRowValue(r, ['奖金', 'bonus']));
+        const totalCost = normalizeNumber(getRowValue(r, ['人工成本', '总成本', '薪酬成本', 'cost']));
+        (map[id] ||= { perf: [], salary: [], bonus: [], cost: [] });
+        if (perf != null) map[id].perf.push(perf);
+        if (salary != null) map[id].salary.push(salary);
+        if (bonus != null) map[id].bonus.push(bonus);
+        if (totalCost != null) map[id].cost.push(totalCost);
+      });
+
+      dataset.employees = dataset.employees.map(e => {
+        const hit = map[e.id];
+        if (!hit) return e;
+        const perfSeries = hit.perf.length ? [...Array(Math.max(0,4-hit.perf.length)).fill(hit.perf[0]), ...hit.perf].slice(-4) : e.perf;
+        const avgSalary = hit.salary.length ? Number((hit.salary.reduce((a,b)=>a+b,0) / hit.salary.length).toFixed(1)) : undefined;
+        const avgBonus = hit.bonus.length ? Number((hit.bonus.reduce((a,b)=>a+b,0) / hit.bonus.length).toFixed(1)) : undefined;
+        const avgCost = hit.cost.length ? Number((hit.cost.reduce((a,b)=>a+b,0) / hit.cost.length).toFixed(1)) : undefined;
+        const tags = Array.from(new Set([...(e.tags || []), ...(avgBonus && avgBonus > 1 ? ['激励较高'] : []), ...(perfSeries.at(-1) >= 90 ? ['高绩效'] : [])]));
+        return { ...e, perf: perfSeries, salary: avgSalary, bonus: avgBonus, payrollCost: avgCost, tags };
+      });
+
+      const employeeCosts = dataset.employees.map(e => e.payrollCost || e.salary).filter(Boolean);
+      if (employeeCosts.length) {
+        dataset.kpis.costPerCapita = Number(safeAvg(employeeCosts).toFixed(1));
+      }
+      state.importedData.payroll = {
+        fileType: 'payroll',
+        rows,
+        matchedBy: '工号',
+        matchedEmployees: dataset.employees.filter(e => map[e.id]).length
+      };
+      computeDeptEfficiencyFromStructure();
+    }
+
+    function applyFinanceData(rows) {
+      const items = rows.map(r => ({
+        year: String(getRowValue(r, ['年份', '年度', 'year']) || '').trim(),
+        revenue: normalizeNumber(getRowValue(r, ['营业收入', '收入', 'revenue'])),
+        cost: normalizeNumber(getRowValue(r, ['营业成本', '总成本', 'cost'])),
+        profit: normalizeNumber(getRowValue(r, ['净利润', '利润', 'profit'])),
+        headcount: normalizeNumber(getRowValue(r, ['员工人数', '人数', 'headcount'])) || dataset.kpis.totalEmployees || 1
+      })).filter(x => x.year);
+      if (!items.length) return;
+      items.sort((a,b)=>String(a.year).localeCompare(String(b.year)));
+      dataset.benchmark.years = items.map(i => i.year);
+      dataset.benchmark.self = {
+        name: '本公司',
+        revenuePerCapita: items.map(i => Number((((i.revenue ?? 0) / i.headcount) || dataset.kpis.revenuePerCapita).toFixed(1))),
+        costPerCapita: items.map(i => Number((((i.cost ?? 0) / i.headcount) || dataset.kpis.costPerCapita).toFixed(1))),
+        profitPerCapita: items.map(i => Number((((i.profit ?? 0) / i.headcount) || dataset.kpis.profitPerCapita).toFixed(1)))
+      };
+      dataset.kpis.revenuePerCapita = dataset.benchmark.self.revenuePerCapita.at(-1) || dataset.kpis.revenuePerCapita;
+      dataset.kpis.costPerCapita = dataset.benchmark.self.costPerCapita.at(-1) || dataset.kpis.costPerCapita;
+      dataset.kpis.profitPerCapita = dataset.benchmark.self.profitPerCapita.at(-1) || dataset.kpis.profitPerCapita;
+      state.importedData.finance = {
+        fileType: 'finance',
+        rows,
+        matchedBy: '工号/年份',
+        years: items.map(i => i.year)
+      };
+      computeDeptEfficiencyFromStructure();
+    }
+
+    async function handleTypedWorkbookImport(type, file) {
+      if (!file) return;
+      try {
+        const workbook = await readWorkbookFile(file);
+        const rows = workbookToRows(workbook);
+        if (type === 'employeeBase') {
+          deriveEmployeeBaseWorkbook(workbook);
+          toast('员工基本信息表导入成功', `已按“中国长安集团人力资源管理系统集成数据标准”读取 ${workbook.SheetNames.length} 个工作表，并用于组织诊断、员工结构、人才盘点分析。`);
+        } else if (type === 'payroll') {
+          applyPayrollData(rows);
+          state.importedWorkbook = { type: 'payroll', sheetNames: workbook.SheetNames.slice(), rowCount: rows.length };
+          toast('薪酬绩效表导入成功', `已读取 ${rows.length} 行数据，并按工号与员工主数据进行匹配，用于人效分析和人才画像。`);
+        } else if (type === 'finance') {
+          applyFinanceData(rows);
+          state.importedWorkbook = { type: 'finance', sheetNames: workbook.SheetNames.slice(), rowCount: rows.length };
+          toast('财务数据表导入成功', `已读取 ${rows.length} 行数据，后续可用于人效分析与人效对标。`);
+        }
+        if (typeof rerenderOpenWindows === 'function') rerenderOpenWindows();
+      } catch (err) {
+        console.error(err);
+        toast('导入失败', '文件解析失败，请确认为 xlsx/xls/csv 且字段格式符合模板。');
+      }
+    }
+
+    function renderImportModule() {
+      const importedInfo = getImportStatusText();
+      const standardInfo = state.schemaProfile || standardSchema;
+      const topSummary = standardInfo.summary.slice(0, 8).map(item =>
+        `<tr><td>${item.group}</td><td>${item.code}</td><td>${item.name}</td><td>${item.itemCount ?? '-'}</td></tr>`
+      ).join('');
+      const fieldPreview = Object.entries(standardInfo.keyFields).slice(0, 6).map(([sheet, fields]) =>
+        `<div class="diag-item"><strong>${sheet}</strong><br>${fields.join(' / ')}</div>`
+      ).join('');
+
+      const importProgress = [
+        ['员工基本信息表', state.importedData.employeeBase ? `已导入 ${state.importedData.employeeBase.employeeCount} 人` : '未导入', '用于组织诊断 / 员工结构 / 人才盘点'],
+        ['薪酬绩效表', state.importedData.payroll ? `已匹配 ${state.importedData.payroll.matchedEmployees} 人` : '未导入', '用于人效分析 / 人才画像'],
+        ['财务数据表', state.importedData.finance ? `已导入 ${state.importedData.finance.years.join('、')}` : '占位待模板', '用于人效分析 / 人效对标']
+      ].map(i => `<div class="kpi"><div class="kpi-label">${i[0]}</div><div class="kpi-value">${i[1]}</div><div class="kpi-trend">${i[2]}</div></div>`).join('');
+
+      return `
+        <div class="content-grid">
+          <div class="panel">
+            <div class="footer-mini">
+              <h4><i class="fa-solid fa-cloud-arrow-up"></i> 数据接入中心 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="upload-zone">
+              <div>
+                <div style="font-size:34px;margin-bottom:8px;"><i class="fa-solid fa-file-arrow-up"></i></div>
+                <div>标准已内置：<strong>《中国长安集团人力资源管理系统集成数据标准》</strong></div>
+                <div class="hint" style="margin-top:6px;">员工基本信息表请参照你上传的标准文件准备；薪酬绩效表、财务数据表目前已预留导入口，后续可按模板继续扩展。</div>
+                <div style="margin-top:12px;" class="switch-row">
+                  <button class="action-btn" id="mockImportBtn">模拟导入数据</button>
+                  <button class="action-btn" id="employeeImportBtn"><i class="fa-solid fa-folder-open"></i> 导入员工基本信息表</button>
+                  <button class="action-btn" id="payrollImportBtn"><i class="fa-solid fa-money-check-dollar"></i> 导入薪酬绩效表</button>
+                  <button class="action-btn" id="financeImportBtn"><i class="fa-solid fa-file-invoice-dollar"></i> 导入财务数据表</button>
+                  <input type="file" id="employeeFileInput" accept=".xlsx,.xls,.csv" class="hidden" />
+                  <input type="file" id="payrollFileInput" accept=".xlsx,.xls,.csv" class="hidden" />
+                  <input type="file" id="financeFileInput" accept=".xlsx,.xls,.csv" class="hidden" />
+                </div>
+              </div>
+            </div>
+            <div class="diag-item" style="margin-top:12px;"><strong>导入状态：</strong> ${importedInfo}</div>
+          </div>
+          <div class="content-grid three">
+            ${importProgress}
+          </div>
+          <div class="content-grid two">
+            <div class="panel">
+              <h4><i class="fa-solid fa-book-atlas"></i> 内置标准关键工作表</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>信息分组</th><th>编码</th><th>指标集</th><th>字段数</th></tr></thead>
+                  <tbody>${topSummary}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-list-check"></i> 关键识别字段</h4>
+              <div class="diag-list">${fieldPreview}</div>
+            </div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel">
+              <h4><i class="fa-solid fa-circle-nodes"></i> 表间关联与分析范围</h4>
+              <div class="diag-list">
+                <div class="diag-item"><strong>唯一关联键：</strong> 各表之间统一以 <strong>员工工号</strong> 作为唯一识别字段，用于跨模块数据匹配与连接。</div>
+                <div class="diag-item"><strong>员工基本信息表：</strong> 导入后用于 <strong>组织诊断、员工结构、人才盘点</strong> 的真实分析，并作为主数据底座。</div>
+                <div class="diag-item"><strong>薪酬绩效表：</strong> 导入后用于 <strong>人效分析、人才画像</strong> 的真实分析，与员工主数据按工号匹配。</div>
+                <div class="diag-item"><strong>财务数据表：</strong> 未来用于 <strong>人效分析、人效对标</strong> 的真实分析，当前入口已预留。</div>
+                <div class="diag-item" data-ai-note="AI 建议：后续增加字段映射面板与口径配置后，可将三张表做标准化主数据建模，实现更稳定的跨模块联动分析。" data-local-note="本地规则建议：请确保三张表中的工号字段一致、无重复、无缺失，以保证跨模块分析准确。">本地规则建议：请确保三张表中的工号字段一致、无重复、无缺失，以保证跨模块分析准确。</div>
+              </div>
+            </div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-table"></i> 当前数据预览</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>工号</th><th>姓名</th><th>部门</th><th>岗位</th><th>学历</th><th>司龄</th><th>绩效</th><th>状态</th></tr></thead>
+                  <tbody>
+                    ${dataset.employees.slice(0, 12).map(e => `<tr><td>${e.id}</td><td>${e.name}</td><td>${e.dept}</td><td>${e.job}</td><td>${e.edu}</td><td>${e.tenure} 年</td><td>${e.perf.at(-1)}</td><td><span class="tag good">正常</span></td></tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTalentModule() {
+      const highPotential = dataset.employees.filter(e => e.potential >= 85).length;
+      const riskTalent = dataset.employees.filter(e => e.risk === '高').length;
+      const keyPosts = dataset.succession.length;
+      const coverage = dataset.succession.length ? Math.round(safeAvg(dataset.succession.map(s => s.coverage)) * 100) : 0;
+      const excellentRate = dataset.employees.length ? ((dataset.employees.filter(e => e.perf.at(-1) >= 90 && e.potential >= 85).length / dataset.employees.length) * 100).toFixed(1) : '0.0';
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-chess-board"></i> 人才盘点与梯队诊断 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="filter-row">
+              <button class="quick-btn active">整体盘点</button>
+              <button class="quick-btn">部门盘点</button>
+              <button class="quick-btn">关键岗位视图</button>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">高潜人才</div><div class="kpi-value">${highPotential}</div><div class="kpi-trend">基于员工基本信息表</div></div>
+            <div class="kpi"><div class="kpi-label">关键岗位</div><div class="kpi-value">${keyPosts}</div><div class="kpi-trend">继任覆盖 ${coverage}%</div></div>
+            <div class="kpi"><div class="kpi-label">风险人才</div><div class="kpi-value">${riskTalent}</div><div class="kpi-trend">需重点关注</div></div>
+            <div class="kpi"><div class="kpi-label">卓越区占比</div><div class="kpi-value">${excellentRate}%</div><div class="kpi-trend">实时计算</div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-border-all"></i> 九宫格人才盘点</h4><div class="chart lg" id="talentMatrix"></div></div>
+            <div class="panel">
+              <h4><i class="fa-solid fa-user-shield"></i> 关键岗位继任</h4>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>岗位</th><th>现任</th><th>覆盖率</th><th>继任者</th><th>风险</th></tr></thead>
+                  <tbody>
+                    ${dataset.succession.map(s => `<tr><td>${s.role}</td><td>${s.owner}</td><td>${Math.round(s.coverage*100)}%</td><td>${s.candidate}</td><td><span class="tag ${s.risk==='高'?'bad':s.risk==='中'?'warn':'good'}">${s.risk}</span></td></tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-clipboard-question"></i> 盘点结论与建议</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 当前盘点结果优先基于导入的员工基本信息表和标准绩效字段计算，高潜与风险人才可随导入数据实时变化。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议优先保证工号、部门、岗位、绩效得分等关键字段完整，以便输出更准确的梯队诊断和继任建议。</div>
+              <div class="diag-item" data-ai-note="AI 摘要：系统已根据员工主数据重新计算人才九宫格与关键岗位覆盖情况，建议优先关注高绩效但高风险员工与无后备的关键岗位。" data-local-note="本地规则结论：当前人才盘点已使用导入的员工基本信息表重新计算。">本地规则结论：当前人才盘点已使用导入的员工基本信息表重新计算。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEfficiencyModule() {
+      const payrollHint = state.importedData.payroll ? '已联动薪酬绩效表' : '等待薪酬绩效表 / 财务数据表';
+      const financeHint = state.importedData.finance ? '已联动财务数据表' : '建议补充财务数据表';
+      return `
+        <div class="content-grid">
+          <div class="footer-mini">
+            <div class="switch-row">
+              <h4 style="margin:0;"><i class="fa-solid fa-chart-column"></i> 人效分析 <span class="tag good step-hint">步骤 1/3</span></h4>
+              <span class="tag good mode-hint">本地规则模式已启用</span>
+            </div>
+            <div class="chip-row">
+              <span class="tag good">人均收入 ${dataset.kpis.revenuePerCapita} 万</span>
+              <span class="tag good">人均利润 ${dataset.kpis.profitPerCapita} 万</span>
+              <span class="tag warn">人均成本 ${dataset.kpis.costPerCapita} 万</span>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">人均收入</div><div class="kpi-value">${dataset.kpis.revenuePerCapita}</div><div class="kpi-trend">${financeHint}</div></div>
+            <div class="kpi"><div class="kpi-label">人均利润</div><div class="kpi-value">${dataset.kpis.profitPerCapita}</div><div class="kpi-trend">最新年度口径</div></div>
+            <div class="kpi"><div class="kpi-label">人均成本</div><div class="kpi-value">${dataset.kpis.costPerCapita}</div><div class="kpi-trend">${payrollHint}</div></div>
+            <div class="kpi"><div class="kpi-label">人事费用率</div><div class="kpi-value">${((dataset.kpis.costPerCapita / Math.max(dataset.kpis.revenuePerCapita, 1)) * 100).toFixed(1)}%</div><div class="kpi-trend">动态计算</div></div>
+          </div>
+          <div class="content-grid two">
+            <div class="panel"><h4><i class="fa-solid fa-chart-line"></i> 历年人效趋势</h4><div class="chart lg" id="effTrend"></div></div>
+            <div class="panel"><h4><i class="fa-solid fa-bars-progress"></i> 部门人效对比</h4><div class="chart lg" id="effDept"></div></div>
+          </div>
+          <div class="panel">
+            <h4><i class="fa-solid fa-briefcase-medical"></i> 人效诊断与建议</h4>
+            <div class="diag-list">
+              <div class="diag-item"><strong>问题诊断：</strong> 当前人效分析会优先使用薪酬绩效表和财务数据表中的字段；如财务数据未导入，则保留示例口径。</div>
+              <div class="diag-item"><strong>优化建议：</strong> 建议后续财务数据表提供“年份、营业收入、营业成本、净利润、员工人数”等字段，薪酬绩效表提供“工号、绩效得分、薪酬成本”等字段。</div>
+              <div class="diag-item" data-ai-note="AI 结论：随着薪酬绩效表和财务数据表导入，系统可形成更真实的人效与对标结果，并识别高成本、低产出部门。" data-local-note="本地规则结论：当前人效分析已按已导入表的字段自动更新。">本地规则结论：当前人效分析已按已导入表的字段自动更新。</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProfileDetail(empId, body) {
+      const emp = dataset.employees.find(e => e.id === empId) || dataset.employees[0];
+      const salaryLine = emp.salary ? `月薪 ${emp.salary}` : '暂无薪酬数据';
+      const bonusLine = emp.bonus ? `奖金 ${emp.bonus}` : '暂无奖金数据';
+      body.querySelector('#profileCard').innerHTML = `
+        <div class="profile-head">
+          <div class="profile-avatar"><i class="fa-solid fa-user"></i></div>
+          <div>
+            <div style="font-size:18px;font-weight:700;">${emp.name}</div>
+            <div class="subtle">${emp.id} · ${emp.dept}</div>
+            <div class="subtle">${emp.job} · ${emp.grade}</div>
+          </div>
+        </div>
+        <div class="diag-item">年龄 ${emp.age} 岁 ｜ 学历 ${emp.edu} ｜ 司龄 ${emp.tenure} 年</div>
+        <div class="chip-row">${emp.tags.map(t => `<span class="tag good">${t}</span>`).join('')}</div>
+        <div class="diag-item"><strong>风险等级：</strong> ${emp.risk} ｜ <strong>合同到期：</strong> ${emp.contract}</div>
+        <div class="diag-item"><strong>薪酬绩效联动：</strong> ${salaryLine} ｜ ${bonusLine} ｜ 最近绩效 ${emp.perf.at(-1)}</div>
+      `;
+      body.querySelector('#profileTimeline').innerHTML = `
+        <div class="timeline-item"><strong>2021.03</strong> 加入公司，任职 ${emp.dept} 岗位。</div>
+        <div class="timeline-item"><strong>2022.08</strong> 负责重点项目 / 关键区域业务。</div>
+        <div class="timeline-item"><strong>2023.12</strong> 获得年度优秀员工 / 核心项目表彰。</div>
+        <div class="timeline-item"><strong>2024.10</strong> 纳入高潜 / 后备人才观察池。</div>
+      `;
+      body.querySelector('#profileAdvice').innerHTML = `
+        <div class="diag-item"><strong>诊断：</strong> 人才画像会优先结合员工基本信息表与薪酬绩效表数据，当前最近绩效为 ${emp.perf.at(-1)}，${emp.salary ? '已匹配到薪酬字段。' : '尚未匹配到薪酬字段。'}</div>
+        <div class="diag-item"><strong>建议：</strong> 可沿专业专家或项目管理双通道发展，建议补充组织影响力与团队带教能力培养。</div>
+        <div class="diag-item" data-ai-note="AI 画像摘要：系统已按工号联动主数据和薪酬绩效数据，可进一步基于长期绩效与薪酬变化识别成长性与保留风险。" data-local-note="本地规则结论：该员工画像已按工号联动已导入数据。">本地规则结论：该员工画像已按工号联动已导入数据。</div>
+      `;
+      requestAnimationFrame(() => initCharts('profile', body, emp));
+    }
+
+    function bindWindowInnerEvents(moduleId, body) {
+      if (moduleId === 'import') {
+        body.querySelector('#mockImportBtn')?.addEventListener('click', () => {
+          resetToMockData();
+          toast('模拟导入成功', '已恢复系统内置模拟数据样本。');
+          if (typeof rerenderOpenWindows === 'function') rerenderOpenWindows();
+        });
+        body.querySelector('#employeeImportBtn')?.addEventListener('click', () => body.querySelector('#employeeFileInput')?.click());
+        body.querySelector('#payrollImportBtn')?.addEventListener('click', () => body.querySelector('#payrollFileInput')?.click());
+        body.querySelector('#financeImportBtn')?.addEventListener('click', () => body.querySelector('#financeFileInput')?.click());
+        body.querySelector('#employeeFileInput')?.addEventListener('change', (e) => handleTypedWorkbookImport('employeeBase', e.target.files?.[0]));
+        body.querySelector('#payrollFileInput')?.addEventListener('change', (e) => handleTypedWorkbookImport('payroll', e.target.files?.[0]));
+        body.querySelector('#financeFileInput')?.addEventListener('change', (e) => handleTypedWorkbookImport('finance', e.target.files?.[0]));
+      }
+      if (moduleId === 'profile') {
+        body.querySelectorAll('[data-profile-id]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-profile-id]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderProfileDetail(btn.dataset.profileId, body);
+        }));
+        renderProfileDetail(dataset.employees[0].id, body);
+      }
+      if (moduleId === 'benchmark') {
+        body.querySelectorAll('[data-peer]').forEach(btn => btn.addEventListener('click', () => btn.classList.toggle('active')));
+        body.querySelectorAll('[data-year]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-year]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateBenchmarkCharts(body);
+        }));
+        body.querySelectorAll('[data-indicator]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelectorAll('[data-indicator]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateBenchmarkCharts(body);
+        }));
+        body.querySelector('#runBenchmarkBtn')?.addEventListener('click', () => runBenchmarkAnalysis(body));
+      }
+      if (moduleId === 'ai') {
+        const chat = body.querySelector('#aiChatBox');
+        chat.innerHTML = `<div class="bubble ai">你好，我是 HR 洞察助手。你可以直接提问，或点击上方快捷问题。</div>`;
+        body.querySelectorAll('[data-question]').forEach(btn => btn.addEventListener('click', () => {
+          body.querySelector('#aiQuestionInput').value = btn.dataset.question;
+          askAiQuestion(body);
+        }));
+        body.querySelector('#askAiBtn')?.addEventListener('click', () => askAiQuestion(body));
+      }
+      if (moduleId === 'settings') {
+        body.querySelector('#resetLayoutBtn')?.addEventListener('click', resetLayout);
+        body.querySelector('#openAllBtn')?.addEventListener('click', () => ['import','structure','talent','profile','benchmark'].forEach(openWindow));
+        body.querySelector('#showDrawerBtn')?.addEventListener('click', () => document.getElementById('settingsDrawer').classList.add('open'));
+      }
+    }
+
+
+    window.addEventListener('resize', () => Object.values(state.windows).forEach(w => resizeChartsIn(w.el)));
+    init();
+  </script>
+</body>
+</html>
